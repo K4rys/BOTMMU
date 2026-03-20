@@ -316,38 +316,6 @@ async def stats(ctx):
     embed.set_footer(text="Continuez à poster vos makeups ! 🎨")
     
     await ctx.send(embed=embed)
-
-@bot.command()
-async def help_points(ctx):
-    """Affiche l'aide du bot"""
-    embed = discord.Embed(
-        title="🎨 AIDE DU BOT MAKEUP POINTS",
-        description="Système de points pour votre association !",
-        color=discord.Color.purple()
-    )
-    embed.add_field(
-        name="📸 COMMENT GAGNER DES POINTS ?",
-        value=f"Postez une **photo de makeup** dans #{MAKEUP_CHANNEL_NAME}\n"
-              "• 1er makeup du mois → **1 point**\n"
-              "• Puis **1 point** tous les **3 makeups**\n"
-              "• Les compteurs se réinitialisent chaque **mois**",
-        inline=False
-    )
-    embed.add_field(
-        name="💬 COMMANDES",
-        value="`!points` - Voir vos points\n"
-              "`!points @membre` - Voir les points d'un membre\n"
-              "`!leaderboard` - Voir le classement\n"
-              "`!stats` - Statistiques du mois\n"
-              "`!help_points` - Afficher cette aide\n\n"
-              "**Commandes admin :**\n"
-              "`!reset_xp` - Réinitialiser tous les points\n"
-              "`!reset_member_xp @membre` - Réinitialiser un membre\n"
-              "`!set_xp @membre nombre` - Définir le nombre de makeups",
-        inline=False
-    )
-    embed.set_footer(text="Bonne chance et faites de beaux makeups ! ✨")
-    await ctx.send(embed=embed)
     @bot.command()
 async def participants(ctx):
     """Affiche la liste de tous les participants du mois avec leurs points"""
@@ -407,6 +375,39 @@ async def participants(ctx):
     embed.set_footer(text="🏅 Top 3 médaillés | Les points sont calculés : 1er = 1pt, puis 1pt tous les 3 makeups")
     
     await ctx.send(embed=embed)
+
+@bot.command()
+async def help_points(ctx):
+    """Affiche l'aide du bot"""
+    embed = discord.Embed(
+        title="🎨 AIDE DU BOT MAKEUP POINTS",
+        description="Système de points pour votre association !",
+        color=discord.Color.purple()
+    )
+    embed.add_field(
+        name="📸 COMMENT GAGNER DES POINTS ?",
+        value=f"Postez une **photo de makeup** dans #{MAKEUP_CHANNEL_NAME}\n"
+              "• 1er makeup du mois → **1 point**\n"
+              "• Puis **1 point** tous les **3 makeups**\n"
+              "• Les compteurs se réinitialisent chaque **mois**",
+        inline=False
+    )
+    embed.add_field(
+        name="💬 COMMANDES",
+        value="`!points` - Voir vos points\n"
+              "`!points @membre` - Voir les points d'un membre\n"
+              "`!leaderboard` - Voir le classement\n"
+              "`!stats` - Statistiques du mois\n"
+              "`!help_points` - Afficher cette aide\n\n"
+              "**Commandes admin :**\n"
+              "`!reset_xp` - Réinitialiser tous les points\n"
+              "`!reset_member_xp @membre` - Réinitialiser un membre\n"
+              "`!set_xp @membre nombre` - Définir le nombre de makeups",
+        inline=False
+    )
+    embed.set_footer(text="Bonne chance et faites de beaux makeups ! ✨")
+    await ctx.send(embed=embed)
+
 
 # ===== LANCEMENT =====
 if __name__ == "__main__":
