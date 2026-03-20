@@ -316,7 +316,7 @@ async def stats(ctx):
     embed.set_footer(text="Continuez à poster vos makeups ! 🎨")
     
     await ctx.send(embed=embed)
-    @bot.command()
+@bot.command()
 async def participants(ctx):
     """Affiche la liste de tous les participants du mois avec leurs points"""
     current_month = get_current_month()
