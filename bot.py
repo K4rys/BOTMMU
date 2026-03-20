@@ -43,19 +43,16 @@ MAKEUP_CHANNEL_NAME = "makeups"
 # ===== VÉRIFICATION D'IMAGE =====
 def message_has_image(message):
     """Vérifie si un message contient une image"""
-    # Vérifier les pièces jointes
     for attachment in message.attachments:
         if attachment.content_type and attachment.content_type.startswith('image/'):
             return True
     
-    # Vérifier les liens d'images
     image_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.mp4']
     content_lower = message.content.lower()
     for ext in image_extensions:
         if ext in content_lower:
             return True
     
-    # Vérifier les liens Discord CDN
     if 'cdn.discordapp.com/attachments' in content_lower:
         return True
     
@@ -78,39 +75,31 @@ async def on_message(message):
     if message.author.bot:
         return
     
-    # Vérifier si le message est dans le salon makeups
     if message.channel.name == MAKEUP_CHANNEL_NAME:
         
-        # Vérifier si le message contient une image
         if not message_has_image(message):
-            # Supprimer le message
             await message.delete()
-            # Envoyer un message privé à l'utilisateur
             try:
                 await message.author.send(f"❌ **Salon réservé aux photos !**\n\nLe salon #{MAKEUP_CHANNEL_NAME} est uniquement pour poster des photos de makeup. Votre message a été supprimé.\n\n📸 Postez votre photo (JPEG, PNG, GIF, etc.) pour gagner des points LXP !")
             except:
-                pass  # Si l'utilisateur a bloqué les MP
-            return  # Ne pas compter ce message
+                pass
+            return
 
-        # Si c'est une image, compter le makeup
         user_id = str(message.author.id)
         current_month = get_current_month()
 
-        # Initialisation
         if user_id not in data:
             data[user_id] = {"count": 0, "month": current_month}
         if data[user_id]["month"] != current_month:
             data[user_id] = {"count": 0, "month": current_month}
             save_data(data)
 
-        # Incrémentation
         data[user_id]["count"] += 1
         new_count = data[user_id]["count"]
         old_points = calculate_points(new_count - 1)
         new_points = calculate_points(new_count)
         save_data(data)
 
-        # Message de gain de point uniquement
         if new_points > old_points:
             embed = discord.Embed(
                 title="⭐ NOUVEAU POINT LXP ! ⭐",
@@ -137,90 +126,6 @@ async def check_new_month():
         save_data(data)
         print(f"📅 Nouveau mois détecté : {current_month}")
 
-# ===== COMMANDES =====
-@bot.command()
-async def points(ctx, member: discord.Member = None):
-    if member is None:
-        member = ctx.author
-    uid = str(member.id)
-    current_month = get_current_month()
-    
-    if uid in data and data[uid]["month"] == current_month:
-        count = data[uid]["count"]
-        points = calculate_points(count)
-        embed = discord.Embed(
-            title=f"📊 Points LXP de {member.display_name}",
-            color=discord.Color.blue()
-        )
-        embed.add_field(name="⭐ Points", value=f"**{points}**", inline=True)
-        embed.add_field(name="📸 Makeups", value=f"{count}", inline=True)
-        
-        # Prochain point
-        remaining = 3 - ((count - 1) % 3) if count > 0 else 1
-        if remaining < 3:
-            embed.add_field(name="🎯 Prochain point", value=f"{remaining} makeup(s)", inline=True)
-        
-        await ctx.send(embed=embed)
-    else:
-        await ctx.send(f"📭 {member.display_name} n'a pas encore posté de makeup ce mois-ci.")
-
-@bot.command()
-async def leaderboard(ctx):
-    current_month = get_current_month()
-    users_points = []
-    
-    for uid, info in data.items():
-        if info["month"] == current_month:
-            points = calculate_points(info["count"])
-            if points > 0:
-                users_points.append((uid, points, info["count"]))
-    
-    users_points.sort(key=lambda x: x[1], reverse=True)
-    
-    embed = discord.Embed(title="🏆 CLASSEMENT LXP DU MOIS", color=discord.Color.gold())
-    description = ""
-    for i, (uid, pts, cnt) in enumerate(users_points[:10], 1):
-        try:
-            user = await bot.fetch_user(int(uid))
-            if user:
-                medal = ""
-                if i == 1:
-                    medal = "🥇 "
-                elif i == 2:
-                    medal = "🥈 "
-                elif i == 3:
-                    medal = "🥉 "
-                description += f"{medal}**{i}.** {user.display_name} : **{pts}** pts ({cnt} makeups)\n"
-        except:
-            description += f"**{i}.** Utilisateur inconnu : **{pts}** pts\n"
-    
-    embed.description = description or "📭 Aucun point ce mois-ci"
-    embed.set_footer(text=f"Mois de {get_current_month()}")
-    await ctx.send(embed=embed)
-
-@bot.command()
-async def help_points(ctx):
-    embed = discord.Embed(
-        title="🎨 AIDE DU BOT",
-        description="Système de points pour les makeups",
-        color=discord.Color.purple()
-    )
-    embed.add_field(
-        name="📸 Comment gagner des points ?",
-        value=f"Postez une **photo de makeup** dans #{MAKEUP_CHANNEL_NAME}\n"
-              "• 1er makeup du mois → **1 point**\n"
-              "• Puis **1 point** tous les **3 makeups**",
-        inline=False
-    )
-    embed.add_field(
-        name="💬 Commandes",
-        value="`!points` - Voir vos points\n"
-              "`!points @membre` - Voir les points d'un membre\n"
-              "`!leaderboard` - Voir le classement\n"
-              "`!help_points` - Aide",
-        inline=False
-    )
-    await ctx.send(embed=embed)
 # ===== COMMANDES ADMIN =====
 @bot.command()
 @commands.has_permissions(administrator=True)
@@ -364,19 +269,51 @@ async def stats(ctx):
     total_makeups = 0
     active_members = 0
     total_points = 0
+    best_member_name = None
+    best_member_points = 0
+    best_member_count = 0
     
     for uid, info in data.items():
-        if info["month"] == current_month:
-            if info["count"] > 0:
+        if info.get("month") == current_month:
+            count = info.get("count", 0)
+            if count > 0:
                 active_members += 1
-                total_makeups += info["count"]
-                total_points += calculate_points(info["count"])
+                total_makeups += count
+                points = calculate_points(count)
+                total_points += points
+                
+                if points > best_member_points:
+                    best_member_points = points
+                    best_member_count = count
+                    try:
+                        user = await bot.fetch_user(int(uid))
+                        best_member_name = user.display_name if user else "Inconnu"
+                    except:
+                        best_member_name = "Inconnu"
     
-    embed = discord.Embed(title="📊 STATISTIQUES DU MOIS", color=discord.Color.green())
-    embed.add_field(name="📸 Total makeups", value=f"{total_makeups}", inline=True)
-    embed.add_field(name="⭐ Total points", value=f"{total_points}", inline=True)
-    embed.add_field(name="👥 Membres actifs", value=f"{active_members}", inline=True)
-    embed.add_field(name="📅 Mois", value=f"{current_month}", inline=True)
+    embed = discord.Embed(
+        title="📊 STATISTIQUES DU MOIS",
+        color=discord.Color.green(),
+        timestamp=datetime.now()
+    )
+    
+    embed.add_field(name="📸 Total makeups", value=f"**{total_makeups}**", inline=True)
+    embed.add_field(name="⭐ Total points", value=f"**{total_points}**", inline=True)
+    embed.add_field(name="👥 Membres actifs", value=f"**{active_members}**", inline=True)
+    
+    if best_member_name and best_member_points > 0:
+        embed.add_field(
+            name="🏆 Meilleur membre du mois",
+            value=f"{best_member_name}\n**{best_member_points}** points ({best_member_count} makeups)",
+            inline=False
+        )
+    
+    if active_members > 0:
+        avg_makeups = round(total_makeups / active_members, 1)
+        embed.add_field(name="📊 Moyenne par membre", value=f"{avg_makeups} makeups", inline=True)
+    
+    embed.add_field(name="📅 Mois", value=f"**{current_month}**", inline=True)
+    embed.set_footer(text="Continuez à poster vos makeups ! 🎨")
     
     await ctx.send(embed=embed)
 
@@ -405,11 +342,70 @@ async def help_points(ctx):
               "`!help_points` - Afficher cette aide\n\n"
               "**Commandes admin :**\n"
               "`!reset_xp` - Réinitialiser tous les points\n"
-              "`!reset_xp @membre` - Réinitialiser un membre\n"
+              "`!reset_member_xp @membre` - Réinitialiser un membre\n"
               "`!set_xp @membre nombre` - Définir le nombre de makeups",
         inline=False
     )
     embed.set_footer(text="Bonne chance et faites de beaux makeups ! ✨")
+    await ctx.send(embed=embed)
+    @bot.command()
+async def participants(ctx):
+    """Affiche la liste de tous les participants du mois avec leurs points"""
+    current_month = get_current_month()
+    users_list = []
+    
+    # Récupérer tous les participants
+    for uid, info in data.items():
+        if info.get("month") == current_month:
+            count = info.get("count", 0)
+            if count > 0:
+                points = calculate_points(count)
+                users_list.append((uid, count, points))
+    
+    # Trier par points (du plus haut au plus bas)
+    users_list.sort(key=lambda x: x[2], reverse=True)
+    
+    if not users_list:
+        await ctx.send("📭 **Aucun participant ce mois-ci.**\n\nPostez des makeups dans #makeups pour apparaître dans le tableau !")
+        return
+    
+    # Créer le tableau
+    embed = discord.Embed(
+        title="📋 TABLEAU DES PARTICIPANTS",
+        description=f"**Mois : {current_month}**\n\nVoici tous les membres qui ont participé ce mois-ci :",
+        color=discord.Color.blue()
+    )
+    
+    # Construire le tableau texte
+    table = "```\n"
+    table += "┌─────┬────────────────────────┬──────────┬────────┐\n"
+    table += "│ N°  │ Participant            │ Makeups │ Points │\n"
+    table += "├─────┼────────────────────────┼──────────┼────────┤\n"
+    
+    for i, (uid, count, points) in enumerate(users_list, 1):
+        try:
+            user = await bot.fetch_user(int(uid))
+            name = user.display_name if user else f"ID:{uid[:8]}"
+        except:
+            name = f"ID:{uid[:8]}"
+        
+        # Tronquer le nom s'il est trop long
+        if len(name) > 22:
+            name = name[:19] + "..."
+        
+        # Formater les lignes
+        medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else "  "
+        table += f"│ {medal} {i:2} │ {name:<22} │ {count:8} │ {points:6} │\n"
+    
+    table += "└─────┴────────────────────────┴──────────┴────────┘\n"
+    table += f"\n📊 Total : {len(users_list)} participant(s) | {sum(p[1] for p in users_list)} makeups"
+    table += "```"
+    
+    embed.description += table
+    
+    # Ajouter une petite légende
+    embed.set_footer(text="🏅 Top 3 médaillés | Les points sont calculés : 1er = 1pt, puis 1pt tous les 3 makeups")
+    
     await ctx.send(embed=embed)
 
 # ===== LANCEMENT =====
