@@ -412,10 +412,11 @@ async def help_points(ctx):
 
 # ===== LANCEMENT =====
 if __name__ == "__main__":
-    TOKEN = "MTQ4NDUyMTAxOTQwNTM3MzUwMA.GJ_o-X.4mNUJX_IOnmPoEeL2D7wrtzwaqgC7itLHpgu8"  # Remplacez par votre token
+    TOKEN = os.getenv('DISCORD_TOKEN')
     
-    if TOKEN == "MTQ4NDUyMTAxOTQwNTM3MzUwMA.GJ_o-X.4mNUJX_IOnmPoEeL2D7wrtzwaqgC7itLHpgu8":
-        print("\n❌ ERREUR: Token Discord non configuré !\n")
+    if not TOKEN:
+        print("\n❌ ERREUR: Token Discord non configuré !")
+        print("📝 Ajoutez DISCORD_TOKEN dans les variables d'environnement Railway\n")
         sys.exit(1)
     
     try:
