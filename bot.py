@@ -221,6 +221,55 @@ async def help_points(ctx):
         inline=False
     )
     await ctx.send(embed=embed)
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def reset_xp(ctx, member: discord.Member = None):
+    """Réinitialise les points LXP (admin uniquement)"""
+    
+    # Demande de confirmation
+    confirm_msg = await ctx.send("⚠️ **ATTENTION !** ⚠️\n\nCette action va réinitialiser TOUS les points LXP.\n\nConfirmez-vous ? Répondez par **oui** ou **non** dans les 30 secondes.")
+    
+    def check(m):
+        return m.author == ctx.author and m.channel == ctx.channel and m.content.lower() in ["oui", "non"]
+    
+    try:
+        response = await bot.wait_for('message', timeout=30.0, check=check)
+        
+        if response.content.lower() == "non":
+            await ctx.send("❌ Réinitialisation annulée.")
+            return
+        
+        # Réinitialisation
+        if member:
+            # Réinitialiser un seul membre
+            uid = str(member.id)
+            if uid in data:
+                current_month = get_current_month()
+                data[uid] = {"count": 0, "month": current_month}
+                save_data(data)
+                await ctx.send(f"✅ Points de {member.display_name} réinitialisés !")
+            else:
+                await ctx.send(f"❌ {member.display_name} n'a aucun point enregistré.")
+        else:
+            # Réinitialiser tout le monde
+            current_month = get_current_month()
+            for uid in data:
+                data[uid] = {"count": 0, "month": current_month}
+            save_data(data)
+            await ctx.send("✅ **Points LXP de TOUS les membres réinitialisés !**")
+            
+            # Option : envoyer un message dans le salon d'annonces
+            embed = discord.Embed(
+                title="🔄 RÉINITIALISATION MENSUELLE",
+                description="Les points LXP ont été réinitialisés pour le nouveau mois !",
+                color=discord.Color.orange()
+            )
+            embed.add_field(name="📅 Nouveau mois", value=get_current_month(), inline=True)
+            embed.add_field(name="🎯 Objectif", value="Postez vos makeups pour gagner des points !", inline=False)
+            await ctx.send(embed=embed)
+            
+    except TimeoutError:
+        await ctx.send("⏰ Temps écoulé, réinitialisation annulée.")
 
 # ===== LANCEMENT =====
 if __name__ == "__main__":
