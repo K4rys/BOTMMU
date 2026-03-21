@@ -177,28 +177,6 @@ async def send_monthly_report(month):
     await report_channel.send(embed=embed)
     print(f"📊 Bilan mensuel envoyé dans #{REPORT_CHANNEL_NAME}")
 
-@tasks.loop(hours=24)
-async def check_new_month():
-    """Vérifie chaque jour si le mois a changé et envoie un bilan"""
-    current_month = get_current_month()
-    previous_month = (datetime.now().replace(day=1) - timedelta(days=1)).strftime("%Y-%m")
-    
-    # Vérifier s'il y a encore des données de l'ancien mois
-    has_old_data = any(info.get("month") == previous_month for info in data.values())
-    
-    if has_old_data:
-        await send_monthly_report(previous_month)
-    
-    # Réinitialiser les compteurs pour le nouveau mois
-    changed = False
-    for uid, info in data.items():
-        if info["month"] != current_month:
-            info["count"] = 0
-            info["month"] = current_month
-            changed = True
-    if changed:
-        save_data(data)
-        print(f"📅 Nouveau mois détecté : {current_month} - Compteurs réinitialisés")
 
 @tasks.loop(hours=24)
 async def check_new_month():
