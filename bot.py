@@ -80,6 +80,7 @@ def get_active_challenge():
 # --- Constantes des salons ---
 MAKEUP_CHANNEL_NAME = "makeups"
 REPORT_CHANNEL_NAME = "botlxp"
+ANNOUNCE_CHANNEL_ID = 1380938525599338506  # Remplace par l'ID de ton salon #annonces
 
 # --- Vérification d'image ---
 def message_has_image(message):
