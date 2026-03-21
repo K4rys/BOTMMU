@@ -108,6 +108,7 @@ async def on_ready():
     print(f"{'='*50}\n")
     check_new_month.start()
     check_scheduled_messages.start()
+    check_challenge_expiry.start()
 
 @bot.event
 async def on_message(message):
