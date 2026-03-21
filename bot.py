@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 import json
 import os
 import sys
+import re
 
 # --- Configuration ---
 intents = discord.Intents.default()
@@ -68,7 +69,6 @@ def calculate_points(count):
     return 1 + (count - 1) // 3
 
 def get_active_challenge():
-    """Retourne le défi actif en fonction de la date du jour"""
     today = datetime.now().date()
     for ch in challenges:
         start = datetime.strptime(ch["start_date"], "%Y-%m-%d").date()
@@ -80,8 +80,8 @@ def get_active_challenge():
 # --- Constantes des salons ---
 MAKEUP_CHANNEL_NAME = "makeups"
 REPORT_CHANNEL_NAME = "botlxp"
-ANNOUNCE_CHANNEL_ID = 1484528182672756766 
-ANNOUNCE_MENTION = "@Présidente" # Remplace par l'ID de ton salon #annonces
+ANNOUNCE_CHANNEL_ID = 1484528182672756766      # ID de ton salon #annonces
+ANNOUNCE_MENTION = "@Présidente"               # ou "@everyone", "@here", "<@&ID_ROLE>"
 
 # --- Vérification d'image ---
 def message_has_image(message):
@@ -97,9 +97,10 @@ def message_has_image(message):
         return True
     return False
 
+# --- Tâches ---
 @tasks.loop(hours=1)
 async def check_challenge_expiry():
-    """Vérifie toutes les heures si un nouveau défi commence et envoie une annonce avec mention."""
+    """Vérifie toutes les heures si un nouveau défi commence et envoie une annonce."""
     today = datetime.now().date()
     print(f"🔍 Vérification des défis du jour : {today}")
 
@@ -113,7 +114,6 @@ async def check_challenge_expiry():
                     print(f"❌ Salon d'annonces introuvable (ID: {ANNOUNCE_CHANNEL_ID})")
                     continue
 
-                # Construction de l'embed avec la mention
                 embed = discord.Embed(
                     title="🎉 NOUVEAU DÉFI !",
                     description=f"{ANNOUNCE_MENTION}\n\n**{ch['theme']}**\n{ch['description']}",
@@ -124,96 +124,62 @@ async def check_challenge_expiry():
                 embed.add_field(name="🎁 Bonus", value=f"{ch['bonus']} point supplémentaire par participation !", inline=False)
                 embed.set_footer(text="Participez en postant une photo avec le thème dans #makeups")
 
-                # Envoi de l'annonce
                 try:
                     await channel.send(embed=embed)
                     ch["announced"] = True
                     save_challenges(challenges)
-                    print(f"✅ Annonce envoyée pour le défi {ch['theme']} avec mention {ANNOUNCE_MENTION}")
-                except discord.Forbidden:
-                    print(f"❌ Permission manquante pour mentionner {ANNOUNCE_MENTION}. Vérifie les permissions du bot.")
+                    print(f"✅ Annonce envoyée pour le défi {ch['theme']}")
                 except Exception as e:
-                    print(f"❌ Erreur lors de l'envoi de l'annonce : {e}")
+                    print(f"❌ Erreur lors de l'envoi : {e}")
             else:
                 print(f"ℹ️ Défi déjà annoncé : {ch['theme']}")
-# --- Événements ---
-@bot.event
-async def on_ready():
-    print(f"\n{'='*50}")
-    print(f"✅ BOT CONNECTÉ !")
-    print(f"📊 Nom: {bot.user.name}")
-    print(f"🌍 Serveurs: {len(bot.guilds)}")
-    print(f"📝 Salon surveillé: #{MAKEUP_CHANNEL_NAME}")
-    print(f"🖼️ Mode images uniquement: ACTIVÉ")
-    print(f"{'='*50}\n")
-    check_new_month.start()
-    check_scheduled_messages.start()
-    check_challenge_expiry.start()
 
-@bot.event
-async def on_message(message):
-    if message.author.bot:
-        return
+@tasks.loop(minutes=1)
+async def check_scheduled_messages():
+    now = datetime.now()
+    current_weekday = now.weekday()
+    current_hour = now.hour
+    current_minute = now.minute
+    today_str = now.strftime("%Y-%m-%d")
 
-    if message.channel.name == MAKEUP_CHANNEL_NAME:
-        if not message_has_image(message):
-            await message.delete()
-            try:
-                await message.author.send(f"❌ **Salon réservé aux photos !**\n\nLe salon #{MAKEUP_CHANNEL_NAME} est uniquement pour poster des photos de makeup. Votre message a été supprimé.\n\n📸 Postez votre photo (JPEG, PNG, GIF, etc.) pour gagner des points LXP !")
-            except:
-                pass
-            return
+    for schedule in scheduled_data:
+        try:
+            if (schedule["day"] == current_weekday and
+                schedule["hour"] == current_hour and
+                schedule["minute"] == current_minute):
+                last_sent = schedule.get("last_sent", "")
+                if last_sent == today_str:
+                    continue
+                channel = bot.get_channel(schedule["channel_id"])
+                if channel:
+                    await channel.send(schedule["message"])
+                    schedule["last_sent"] = today_str
+                    save_scheduled(scheduled_data)
+                    print(f"📢 Annonce programmée envoyée dans #{channel.name}")
+        except Exception as e:
+            print(f"Erreur dans check_scheduled_messages: {e}")
 
-        user_id = str(message.author.id)
-        current_month = get_current_month()
+@tasks.loop(hours=24)
+async def check_new_month():
+    current_month = get_current_month()
+    previous_month = (datetime.now().replace(day=1) - timedelta(days=1)).strftime("%Y-%m")
+    has_old_data = any(info.get("month") == previous_month for info in data.values())
+    if has_old_data:
+        await send_monthly_report(previous_month)
 
-        # Initialisation avec bonus
-        if user_id not in data:
-            data[user_id] = {"count": 0, "month": current_month, "bonus_points": 0}
-        if data[user_id]["month"] != current_month:
-            data[user_id] = {"count": 0, "month": current_month, "bonus_points": 0}
-            save_data(data)
-
-        data[user_id]["count"] += 1
-        new_count = data[user_id]["count"]
-        old_points = calculate_points(new_count - 1) + data[user_id].get("bonus_points", 0)
-        new_points = calculate_points(new_count) + data[user_id].get("bonus_points", 0)
+    changed = False
+    for uid, info in data.items():
+        if info["month"] != current_month:
+            info["count"] = 0
+            info["month"] = current_month
+            info["bonus_points"] = 0
+            for key in list(info.keys()):
+                if key.startswith("bonus_challenge_"):
+                    del info[key]
+            changed = True
+    if changed:
         save_data(data)
-
-        # Réactions automatiques
-        await message.add_reaction("❤️")
-    
-
-        # Bonus de défi
-        active_challenge = get_active_challenge()
-        if active_challenge:
-            theme = active_challenge["theme"].lower()
-            if theme in message.content.lower():
-                # Vérifier que le bonus n'a pas déjà été donné pour ce défi ce mois-ci (optionnel)
-                bonus_key = f"bonus_challenge_{active_challenge['id']}"
-                if bonus_key not in data[user_id]:
-                    data[user_id][bonus_key] = 0
-                if data[user_id][bonus_key] == 0:  # Une seule fois par défi
-                    data[user_id]["bonus_points"] += active_challenge["bonus"]
-                    data[user_id][bonus_key] = 1
-                    save_data(data)
-                    await message.channel.send(
-                        f"{message.author.mention} a participé au défi **{active_challenge['theme']}** ! +{active_challenge['bonus']} point bonus 🎉"
-                    )
-
-        # Message de gain de point
-        if new_points > old_points:
-            embed = discord.Embed(
-                title="⭐ NOUVEAU POINT LXP ! ⭐",
-                description=f"{message.author.mention} vient de gagner **{new_points} point(s)** !",
-                color=discord.Color.gold()
-            )
-            embed.add_field(name="📸 Makeups postés", value=f"{new_count}", inline=True)
-            embed.add_field(name="⭐ Total points", value=f"{new_points}", inline=True)
-            embed.set_footer(text="Trop fort(e)! 🎨")
-            await message.channel.send(embed=embed)
-
-    await bot.process_commands(message)
+        print(f"📅 Nouveau mois détecté : {current_month} - Compteurs réinitialisés")
 
 # --- Rapport mensuel ---
 async def send_monthly_report(month):
@@ -275,79 +241,80 @@ async def send_monthly_report(month):
     await report_channel.send(embed=embed)
     print(f"📊 Bilan mensuel envoyé dans #{REPORT_CHANNEL_NAME}")
 
-@tasks.loop(hours=24)
-async def check_new_month():
-    current_month = get_current_month()
-    previous_month = (datetime.now().replace(day=1) - timedelta(days=1)).strftime("%Y-%m")
-    has_old_data = any(info.get("month") == previous_month for info in data.values())
-    if has_old_data:
-        await send_monthly_report(previous_month)
+# --- Événements ---
+@bot.event
+async def on_ready():
+    print(f"\n{'='*50}")
+    print(f"✅ BOT CONNECTÉ !")
+    print(f"📊 Nom: {bot.user.name}")
+    print(f"🌍 Serveurs: {len(bot.guilds)}")
+    print(f"📝 Salon surveillé: #{MAKEUP_CHANNEL_NAME}")
+    print(f"🖼️ Mode images uniquement: ACTIVÉ")
+    print(f"{'='*50}\n")
+    check_new_month.start()
+    check_scheduled_messages.start()
+    check_challenge_expiry.start()
 
-    changed = False
-    for uid, info in data.items():
-        if info["month"] != current_month:
-            info["count"] = 0
-            info["month"] = current_month
-            info["bonus_points"] = 0
-            # Nettoyer les anciens marqueurs de défis
-            for key in list(info.keys()):
-                if key.startswith("bonus_challenge_"):
-                    del info[key]
-            changed = True
-    if changed:
+@bot.event
+async def on_message(message):
+    if message.author.bot:
+        return
+
+    if message.channel.name == MAKEUP_CHANNEL_NAME:
+        if not message_has_image(message):
+            await message.delete()
+            try:
+                await message.author.send(f"❌ **Salon réservé aux photos !**\n\nLe salon #{MAKEUP_CHANNEL_NAME} est uniquement pour poster des photos de makeup. Votre message a été supprimé.\n\n📸 Postez votre photo (JPEG, PNG, GIF, etc.) pour gagner des points LXP !")
+            except:
+                pass
+            return
+
+        user_id = str(message.author.id)
+        current_month = get_current_month()
+
+        if user_id not in data:
+            data[user_id] = {"count": 0, "month": current_month, "bonus_points": 0}
+        if data[user_id]["month"] != current_month:
+            data[user_id] = {"count": 0, "month": current_month, "bonus_points": 0}
+            save_data(data)
+
+        data[user_id]["count"] += 1
+        new_count = data[user_id]["count"]
+        old_points = calculate_points(new_count - 1) + data[user_id].get("bonus_points", 0)
+        new_points = calculate_points(new_count) + data[user_id].get("bonus_points", 0)
         save_data(data)
-        print(f"📅 Nouveau mois détecté : {current_month} - Compteurs réinitialisés")
 
-# --- Annonces programmées ---
-@tasks.loop(minutes=1)
-async def check_scheduled_messages():
-    now = datetime.now()
-    current_weekday = now.weekday()
-    current_hour = now.hour
-    current_minute = now.minute
-    today_str = now.strftime("%Y-%m-%d")
+        await message.add_reaction("❤️")
 
-    for schedule in scheduled_data:
-        try:
-            if (schedule["day"] == current_weekday and
-                schedule["hour"] == current_hour and
-                schedule["minute"] == current_minute):
-                last_sent = schedule.get("last_sent", "")
-                if last_sent == today_str:
-                    continue
-                channel = bot.get_channel(schedule["channel_id"])
-                if channel:
-                    await channel.send(schedule["message"])
-                    schedule["last_sent"] = today_str
-                    save_scheduled(scheduled_data)
-                    print(f"📢 Annonce programmée envoyée dans #{channel.name}")
-        except Exception as e:
-            print(f"Erreur dans check_scheduled_messages: {e}")
-@tasks.loop(hours=1)
-async def check_challenge_expiry():
-    """Vérifie toutes les heures si un nouveau défi commence et envoie une annonce."""
-    today = datetime.now().date()
-    # On parcourt les défis pour trouver ceux qui commencent aujourd'hui
-    for ch in challenges:
-        start_date = datetime.strptime(ch["start_date"], "%Y-%m-%d").date()
-        if start_date == today:
-            # Vérifier qu'on n'a pas déjà envoyé l'annonce (optionnel)
-            if not ch.get("announced", False):
-                channel = bot.get_channel(ANNOUNCE_CHANNEL_ID)
-                if channel:
-                    embed = discord.Embed(
-                        title="🎉 NOUVEAU DÉFI !",
-                        description=f"**{ch['theme']}**\n{ch['description']}",
-                        color=discord.Color.purple(),
-                        timestamp=datetime.now()
+        # Bonus de défi
+        active_challenge = get_active_challenge()
+        if active_challenge:
+            theme = active_challenge["theme"].lower()
+            if theme in message.content.lower():
+                bonus_key = f"bonus_challenge_{active_challenge['id']}"
+                if bonus_key not in data[user_id]:
+                    data[user_id][bonus_key] = 0
+                if data[user_id][bonus_key] == 0:
+                    data[user_id]["bonus_points"] += active_challenge["bonus"]
+                    data[user_id][bonus_key] = 1
+                    save_data(data)
+                    await message.channel.send(
+                        f"{message.author.mention} a participé au défi **{active_challenge['theme']}** ! +{active_challenge['bonus']} point bonus 🎉"
                     )
-                    embed.add_field(name="📅 Dates", value=f"Du {ch['start_date']} au {ch['end_date']}", inline=False)
-                    embed.add_field(name="🎁 Bonus", value=f"{ch['bonus']} point supplémentaire par participation !", inline=False)
-                    embed.set_footer(text="Participez en postant une photo avec le thème dans #makeups")
-                    await channel.send(embed=embed)
-                    # Marquer comme annoncé pour ne pas le répéter
-                    ch["announced"] = True
-                    save_challenges(challenges)
+
+        # Message de gain de point
+        if new_points > old_points:
+            embed = discord.Embed(
+                title="⭐ NOUVEAU POINT LXP ! ⭐",
+                description=f"{message.author.mention} vient de gagner **{new_points} point(s)** !",
+                color=discord.Color.gold()
+            )
+            embed.add_field(name="📸 Makeups postés", value=f"{new_count}", inline=True)
+            embed.add_field(name="⭐ Total points", value=f"{new_points}", inline=True)
+            embed.set_footer(text="Trop fort(e)! 🎨")
+            await message.channel.send(embed=embed)
+
+    await bot.process_commands(message)
 
 # --- Commandes admin ---
 @bot.command()
@@ -413,6 +380,171 @@ async def set_xp(ctx, member: discord.Member, count: int):
     save_data(data)
     points = calculate_points(count) + data[uid].get("bonus_points", 0)
     await ctx.send(f"✅ {member.display_name} a maintenant **{count}** makeups ce mois-ci ({points} points LXP).")
+
+# --- Commandes planification ---
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def planifier(ctx, action, *, args=None):
+    global scheduled_data
+    if action == "add":
+        parts = args.split(' ', 3)
+        if len(parts) < 4:
+            await ctx.send("❌ Format : !planifier add #salon lundi 18:00 \"Message\"")
+            return
+        channel_mention = parts[0]
+        day_name = parts[1].lower()
+        hour_min = parts[2]
+        message = parts[3].strip('"')
+        if not channel_mention.startswith('<#') or not channel_mention.endswith('>'):
+            await ctx.send("❌ Mentionne un salon valide (ex: #annonces)")
+            return
+        channel_id = int(channel_mention[2:-1])
+        days = {"lundi": 0, "mardi": 1, "mercredi": 2, "jeudi": 3, "vendredi": 4, "samedi": 5, "dimanche": 6}
+        if day_name not in days:
+            await ctx.send("❌ Jour invalide. Utilise : lundi, mardi, mercredi, jeudi, vendredi, samedi, dimanche")
+            return
+        day = days[day_name]
+        try:
+            hour, minute = map(int, hour_min.split(':'))
+            if not (0 <= hour <= 23 and 0 <= minute <= 59):
+                raise ValueError
+        except:
+            await ctx.send("❌ Heure invalide. Format : HH:MM (ex: 18:00)")
+            return
+        new_schedule = {
+            "id": len(scheduled_data) + 1,
+            "channel_id": channel_id,
+            "day": day,
+            "hour": hour,
+            "minute": minute,
+            "message": message,
+            "last_sent": ""
+        }
+        scheduled_data.append(new_schedule)
+        save_scheduled(scheduled_data)
+        await ctx.send(f"✅ Annonce programmée : tous les {day_name} à {hour:02d}:{minute:02d} dans <#{channel_id}>.")
+
+    elif action == "list":
+        if not scheduled_data:
+            await ctx.send("📭 Aucune annonce programmée.")
+            return
+        description = ""
+        day_names = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
+        for s in scheduled_data:
+            day_name = day_names[s["day"]]
+            description += f"**ID {s['id']}** : {day_name} {s['hour']:02d}:{s['minute']:02d} → <#{s['channel_id']}> : {s['message'][:50]}...\n"
+        embed = discord.Embed(title="📅 Annonces programmées", description=description, color=discord.Color.blue())
+        await ctx.send(embed=embed)
+
+    elif action == "remove":
+        try:
+            id_to_remove = int(args)
+            new_list = [s for s in scheduled_data if s["id"] != id_to_remove]
+            if len(new_list) == len(scheduled_data):
+                await ctx.send(f"❌ Aucune annonce avec l'ID {id_to_remove}.")
+                return
+            scheduled_data = new_list
+            save_scheduled(scheduled_data)
+            await ctx.send(f"✅ Annonce ID {id_to_remove} supprimée.")
+        except:
+            await ctx.send("❌ Utilisation : !planifier remove <id>")
+
+    else:
+        await ctx.send("❌ Action inconnue. Utilise : add, list, remove")
+
+# --- Commandes défis ---
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def defi(ctx, action, *, args=None):
+    global challenges
+    if action == "add":
+        parts = re.findall(r'"([^"]*)"', args)
+        if len(parts) < 2:
+            await ctx.send("❌ Format : !defi add \"thème\" \"description\" durée")
+            return
+        theme = parts[0]
+        description = parts[1]
+        remaining = args.replace(f'"{theme}"', "").replace(f'"{description}"', "").strip()
+        try:
+            duration = int(remaining)
+        except:
+            await ctx.send("❌ La durée doit être un nombre de jours.")
+            return
+        start_date = datetime.now().date()
+        end_date = start_date + timedelta(days=duration)
+        new_id = max([c["id"] for c in challenges], default=0) + 1
+        new_challenge = {
+            "id": new_id,
+            "theme": theme,
+            "description": description,
+            "start_date": start_date.strftime("%Y-%m-%d"),
+            "end_date": end_date.strftime("%Y-%m-%d"),
+            "bonus": 1,
+            "announced": False
+        }
+        challenges.append(new_challenge)
+        save_challenges(challenges)
+        await ctx.send(f"✅ Défi ajouté : **{theme}** du {start_date} au {end_date}.")
+
+    elif action == "list":
+        if not challenges:
+            await ctx.send("📭 Aucun défi enregistré.")
+            return
+        challenges_sorted = sorted(challenges, key=lambda x: x["start_date"])
+        today = datetime.now().date()
+        active = None
+        upcoming = []
+        for ch in challenges_sorted:
+            start = datetime.strptime(ch["start_date"], "%Y-%m-%d").date()
+            end = datetime.strptime(ch["end_date"], "%Y-%m-%d").date()
+            if start <= today <= end:
+                active = ch
+            elif start > today:
+                upcoming.append(ch)
+
+        embed = discord.Embed(title="📋 DÉFIS", color=discord.Color.blue(), timestamp=datetime.now())
+
+        if active:
+            embed.add_field(
+                name=f"🟢 EN COURS : {active['theme']}",
+                value=f"📅 {active['start_date']} → {active['end_date']}\n"
+                      f"📝 {active['description']}\n"
+                      f"🎁 Bonus : {active['bonus']} point",
+                inline=False
+            )
+        else:
+            embed.add_field(name="🟢 Aucun défi actif", value="Le prochain défi commencera bientôt !", inline=False)
+
+        if upcoming:
+            next_challenges = upcoming[:3]
+            value = ""
+            for ch in next_challenges:
+                value += f"**{ch['theme']}**\n"
+                value += f"📅 {ch['start_date']} → {ch['end_date']}\n"
+                value += f"📝 {ch['description']}\n"
+                value += f"🎁 Bonus : {ch['bonus']} point\n\n"
+            embed.add_field(name="⏳ PROCHAINS DÉFIS", value=value.strip(), inline=False)
+        else:
+            embed.add_field(name="⏳ Aucun autre défi à venir", value="C'est tout pour l'instant !", inline=False)
+
+        embed.set_footer(text=f"Total des défis : {len(challenges)}")
+        await ctx.send(embed=embed)
+
+    elif action == "remove":
+        try:
+            id_to_remove = int(args)
+            new_list = [c for c in challenges if c["id"] != id_to_remove]
+            if len(new_list) == len(challenges):
+                await ctx.send(f"❌ Aucun défi avec l'ID {id_to_remove}.")
+                return
+            challenges = new_list
+            save_challenges(challenges)
+            await ctx.send(f"✅ Défi ID {id_to_remove} supprimé.")
+        except:
+            await ctx.send("❌ Utilisation : !defi remove <id>")
+
+    else:
+        await ctx.send("❌ Action inconnue. Utilise : add, list, remove")
 
 # --- Commandes utilisateurs ---
 @bot.command()
@@ -543,7 +675,7 @@ async def participants(ctx):
 
 @bot.command()
 async def help_points(ctx):
-    embed = discord.Embed(title="🎨 AIDE DU BOT MMULXP", description="Petit robot crée par Karys, la Présidente ! ", color=discord.Color.purple())
+    embed = discord.Embed(title="🎨 AIDE DU BOT MMULXP", description="Petit robot crée par Karys, la Présidente !", color=discord.Color.purple())
     embed.add_field(
         name="📸 COMMENT GAGNER DES POINTS ?",
         value=f"Postez une **photo de makeup** dans #{MAKEUP_CHANNEL_NAME}\n"
@@ -579,171 +711,6 @@ async def help_points(ctx):
     embed.set_footer(text="Bonne chance et faites de beaux makeups ! ✨")
     await ctx.send(embed=embed)
 
-# --- Commandes planification (inchangées) ---
-@bot.command()
-@commands.has_permissions(administrator=True)
-async def planifier(ctx, action, *, args=None):
-    global scheduled_data
-    if action == "add":
-        parts = args.split(' ', 3)
-        if len(parts) < 4:
-            await ctx.send("❌ Format : !planifier add #salon lundi 18:00 \"Message\"")
-            return
-        channel_mention = parts[0]
-        day_name = parts[1].lower()
-        hour_min = parts[2]
-        message = parts[3].strip('"')
-        if not channel_mention.startswith('<#') or not channel_mention.endswith('>'):
-            await ctx.send("❌ Mentionne un salon valide (ex: #annonces)")
-            return
-        channel_id = int(channel_mention[2:-1])
-        days = {"lundi": 0, "mardi": 1, "mercredi": 2, "jeudi": 3, "vendredi": 4, "samedi": 5, "dimanche": 6}
-        if day_name not in days:
-            await ctx.send("❌ Jour invalide. Utilise : lundi, mardi, mercredi, jeudi, vendredi, samedi, dimanche")
-            return
-        day = days[day_name]
-        try:
-            hour, minute = map(int, hour_min.split(':'))
-            if not (0 <= hour <= 23 and 0 <= minute <= 59):
-                raise ValueError
-        except:
-            await ctx.send("❌ Heure invalide. Format : HH:MM (ex: 18:00)")
-            return
-        new_schedule = {
-            "id": len(scheduled_data) + 1,
-            "channel_id": channel_id,
-            "day": day,
-            "hour": hour,
-            "minute": minute,
-            "message": message,
-            "last_sent": ""
-        }
-        scheduled_data.append(new_schedule)
-        save_scheduled(scheduled_data)
-        await ctx.send(f"✅ Annonce programmée : tous les {day_name} à {hour:02d}:{minute:02d} dans <#{channel_id}>.")
-
-    elif action == "list":
-        if not scheduled_data:
-            await ctx.send("📭 Aucune annonce programmée.")
-            return
-        description = ""
-        day_names = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
-        for s in scheduled_data:
-            day_name = day_names[s["day"]]
-            description += f"**ID {s['id']}** : {day_name} {s['hour']:02d}:{s['minute']:02d} → <#{s['channel_id']}> : {s['message'][:50]}...\n"
-        embed = discord.Embed(title="📅 Annonces programmées", description=description, color=discord.Color.blue())
-        await ctx.send(embed=embed)
-
-    elif action == "remove":
-        try:
-            id_to_remove = int(args)
-            new_list = [s for s in scheduled_data if s["id"] != id_to_remove]
-            if len(new_list) == len(scheduled_data):
-                await ctx.send(f"❌ Aucune annonce avec l'ID {id_to_remove}.")
-                return
-            scheduled_data = new_list
-            save_scheduled(scheduled_data)
-            await ctx.send(f"✅ Annonce ID {id_to_remove} supprimée.")
-        except:
-            await ctx.send("❌ Utilisation : !planifier remove <id>")
-
-    else:
-        await ctx.send("❌ Action inconnue. Utilise : add, list, remove")
-# --- Commandes défis ---
-@bot.command()
-@commands.has_permissions(administrator=True)
-async def defi(ctx, action, *, args=None):
-    global challenges   # <-- placé en premier
-    if action == "add":
-        import re
-        parts = re.findall(r'"([^"]*)"', args)
-        if len(parts) < 2:
-            await ctx.send("❌ Format : !defi add \"thème\" \"description\" durée")
-            return
-        theme = parts[0]
-        description = parts[1]
-        remaining = args.replace(f'"{theme}"', "").replace(f'"{description}"', "").strip()
-        try:
-            duration = int(remaining)
-        except:
-            await ctx.send("❌ La durée doit être un nombre de jours.")
-            return
-        start_date = datetime.now().date()
-        end_date = start_date + timedelta(days=duration)
-        new_id = max([c["id"] for c in challenges], default=0) + 1
-        new_challenge = {
-            "id": new_id,
-            "theme": theme,
-            "description": description,
-            "start_date": start_date.strftime("%Y-%m-%d"),
-            "end_date": end_date.strftime("%Y-%m-%d"),
-            "bonus": 1,
-            "announced": False
-        }
-        challenges.append(new_challenge)
-        save_challenges(challenges)
-        await ctx.send(f"✅ Défi ajouté : **{theme}** du {start_date} au {end_date}.")
-
-    elif action == "list":
-        if not challenges:
-            await ctx.send("📭 Aucun défi enregistré.")
-            return
-
-        challenges_sorted = sorted(challenges, key=lambda x: x["start_date"])
-        today = datetime.now().date()
-        active = None
-        upcoming = []
-        for ch in challenges_sorted:
-            start = datetime.strptime(ch["start_date"], "%Y-%m-%d").date()
-            end = datetime.strptime(ch["end_date"], "%Y-%m-%d").date()
-            if start <= today <= end:
-                active = ch
-            elif start > today:
-                upcoming.append(ch)
-
-        embed = discord.Embed(title="📋 DÉFIS", color=discord.Color.blue(), timestamp=datetime.now())
-
-        if active:
-            embed.add_field(
-                name=f"🟢 EN COURS : {active['theme']}",
-                value=f"📅 {active['start_date']} → {active['end_date']}\n"
-                      f"📝 {active['description']}\n"
-                      f"🎁 Bonus : {active['bonus']} point",
-                inline=False
-            )
-        else:
-            embed.add_field(name="🟢 Aucun défi actif", value="Le prochain défi commencera bientôt !", inline=False)
-
-        if upcoming:
-            next_challenges = upcoming[:3]
-            value = ""
-            for ch in next_challenges:
-                value += f"**{ch['theme']}**\n"
-                value += f"📅 {ch['start_date']} → {ch['end_date']}\n"
-                value += f"📝 {ch['description']}\n"
-                value += f"🎁 Bonus : {ch['bonus']} point\n\n"
-            embed.add_field(name="⏳ PROCHAINS DÉFIS", value=value.strip(), inline=False)
-        else:
-            embed.add_field(name="⏳ Aucun autre défi à venir", value="C'est tout pour l'instant !", inline=False)
-
-        embed.set_footer(text=f"Total des défis : {len(challenges)}")
-        await ctx.send(embed=embed)
-
-    elif action == "remove":
-        try:
-            id_to_remove = int(args)
-            new_list = [c for c in challenges if c["id"] != id_to_remove]
-            if len(new_list) == len(challenges):
-                await ctx.send(f"❌ Aucun défi avec l'ID {id_to_remove}.")
-                return
-            challenges = new_list
-            save_challenges(challenges)
-            await ctx.send(f"✅ Défi ID {id_to_remove} supprimé.")
-        except:
-            await ctx.send("❌ Utilisation : !defi remove <id>")
-
-    else:
-        await ctx.send("❌ Action inconnue. Utilise : add, list, remove")
 # --- Lancement ---
 if __name__ == "__main__":
     TOKEN = os.getenv('DISCORD_TOKEN')
