@@ -282,6 +282,31 @@ async def check_scheduled_messages():
                     print(f"📢 Annonce programmée envoyée dans #{channel.name}")
         except Exception as e:
             print(f"Erreur dans check_scheduled_messages: {e}")
+@tasks.loop(hours=1)
+async def check_challenge_expiry():
+    """Vérifie toutes les heures si un nouveau défi commence et envoie une annonce."""
+    today = datetime.now().date()
+    # On parcourt les défis pour trouver ceux qui commencent aujourd'hui
+    for ch in challenges:
+        start_date = datetime.strptime(ch["start_date"], "%Y-%m-%d").date()
+        if start_date == today:
+            # Vérifier qu'on n'a pas déjà envoyé l'annonce (optionnel)
+            if not ch.get("announced", False):
+                channel = bot.get_channel(ANNOUNCE_CHANNEL_ID)
+                if channel:
+                    embed = discord.Embed(
+                        title="🎉 NOUVEAU DÉFI !",
+                        description=f"**{ch['theme']}**\n{ch['description']}",
+                        color=discord.Color.purple(),
+                        timestamp=datetime.now()
+                    )
+                    embed.add_field(name="📅 Dates", value=f"Du {ch['start_date']} au {ch['end_date']}", inline=False)
+                    embed.add_field(name="🎁 Bonus", value=f"{ch['bonus']} point supplémentaire par participation !", inline=False)
+                    embed.set_footer(text="Participez en postant une photo avec le thème dans #makeups")
+                    await channel.send(embed=embed)
+                    # Marquer comme annoncé pour ne pas le répéter
+                    ch["announced"] = True
+                    save_challenges(challenges)
 
 # --- Commandes admin ---
 @bot.command()
