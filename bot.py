@@ -628,11 +628,11 @@ async def defi(ctx, action, *, args=None):
             end = datetime.strptime(c["end_date"], "%Y-%m-%d").date()
             status = "🟢 actif" if start <= today <= end else "⏳ à venir" if today < start else "🔒 terminé"
             embed.add_field(
-                name=f"ID {c['id']} : {c['theme']}",
+                name=f"N°{c['id']} : {c['theme']}",
                 value=f"📅 {c['start_date']} → {c['end_date']}\n"
                       f"📝 {c['description']}\n"
-                      f"🎁 Bonus : {c['bonus']} point\n"
-                      f"📊 {status}",
+                      f"Bonus : {c['bonus']} point\n"
+                      f"{status}",
                 inline=False
             )
         await ctx.send(embed=embed)
