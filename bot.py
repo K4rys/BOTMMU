@@ -142,8 +142,7 @@ async def on_message(message):
 
         # Réactions automatiques
         await message.add_reaction("❤️")
-        await message.add_reaction("🔥")
-        await message.add_reaction("🎨")
+    
 
         # Bonus de défi
         active_challenge = get_active_challenge()
@@ -171,7 +170,7 @@ async def on_message(message):
             )
             embed.add_field(name="📸 Makeups postés", value=f"{new_count}", inline=True)
             embed.add_field(name="⭐ Total points", value=f"{new_points}", inline=True)
-            embed.set_footer(text="Continuez comme ça ! 🎨")
+            embed.set_footer(text="Trop fort(e)! 🎨")
             await message.channel.send(embed=embed)
 
     await bot.process_commands(message)
