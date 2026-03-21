@@ -15,6 +15,7 @@ intents.messages = True
 bot = commands.Bot(command_prefix='!', intents=intents)
 
 # Fichier de sauvegarde
+
 DATA_FILE = 'makeup_data.json'
 
 def load_data():
@@ -39,6 +40,7 @@ def calculate_points(count):
 
 # Salon à surveiller
 MAKEUP_CHANNEL_NAME = "makeups"
+REPORT_CHANNEL_NAME = "botlxp"   
 
 # ===== VÉRIFICATION D'IMAGE =====
 def message_has_image(message):
@@ -115,7 +117,19 @@ async def on_message(message):
 
 @tasks.loop(hours=24)
 async def check_new_month():
+    """Vérifie chaque jour si le mois a changé et envoie un bilan"""
     current_month = get_current_month()
+    previous_month = (datetime.now().replace(day=1) - timedelta(days=1)).strftime("%Y-%m")
+    
+    # Détecter si on vient de passer au nouveau mois
+    # On vérifie si des données existent encore pour l'ancien mois
+    has_old_data = any(info.get("month") == previous_month for info in data.values())
+    
+    if has_old_data:
+        # On est le 1er du mois et il y a des données de l'ancien mois → envoyer le bilan
+        await send_monthly_report(previous_month)
+    
+    # Réinitialiser les compteurs pour le nouveau mois
     changed = False
     for uid, info in data.items():
         if info["month"] != current_month:
@@ -124,7 +138,7 @@ async def check_new_month():
             changed = True
     if changed:
         save_data(data)
-        print(f"📅 Nouveau mois détecté : {current_month}")
+        print(f"📅 Nouveau mois détecté : {current_month} - Compteurs réinitialisés")
 
 # ===== COMMANDES ADMIN =====
 @bot.command()
