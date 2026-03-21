@@ -113,15 +113,12 @@ async def check_challenge_expiry():
                     print(f"❌ Salon d'annonces introuvable (ID: {ANNOUNCE_CHANNEL_ID})")
                     continue
 
-                # --- ENVOI DE LA MENTION AVEC allowed_mentions ---
+                # Envoi de la mention
                 if ANNOUNCE_MENTION:
-                    # On construit un message contenant la mention
-                    mention_message = ANNOUNCE_MENTION
-                    # On autorise explicitement toutes les mentions
                     allowed = discord.AllowedMentions(everyone=True, roles=True, users=True)
-                    await channel.send(content=mention_message, allowed_mentions=allowed)
+                    await channel.send(content=ANNOUNCE_MENTION, allowed_mentions=allowed)
 
-                # --- ENVOI DE L'EMBED ---
+                # Envoi de l'embed
                 embed = discord.Embed(
                     title="🎉 NOUVEAU DÉFI !",
                     description=f"**{ch['theme']}**\n{ch['description']}",
@@ -134,9 +131,28 @@ async def check_challenge_expiry():
 
                 await channel.send(embed=embed)
 
+                # Marquer comme annoncé
                 ch["announced"] = True
                 save_challenges(challenges)
                 print(f"✅ Annonce envoyée pour le défi {ch['theme']}")
+
+                # --- Envoyer un message de confirmation dans #botlxp ---
+                confirm_channel = None
+                for guild in bot.guilds:
+                    for c in guild.text_channels:
+                        if c.name == REPORT_CHANNEL_NAME:
+                            confirm_channel = c
+                            break
+                    if confirm_channel:
+                        break
+
+                if confirm_channel:
+                    try:
+                        await confirm_channel.send(
+                            f"✅ **Annonce envoyée** pour le défi **{ch['theme']}** dans <#{ANNOUNCE_CHANNEL_ID}>."
+                        )
+                    except Exception as e:
+                        print(f"⚠️ Impossible d'envoyer la confirmation dans #{REPORT_CHANNEL_NAME} : {e}")
             else:
                 print(f"ℹ️ Défi déjà annoncé : {ch['theme']}")
 
