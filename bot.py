@@ -81,7 +81,7 @@ def get_active_challenge():
 MAKEUP_CHANNEL_NAME = "makeups"
 REPORT_CHANNEL_NAME = "botlxp"
 ANNOUNCE_CHANNEL_ID = 1484528182672756766     # ID de ton salon #annonces
-ANNOUNCE_MENTION = "<@1482884100850192424>"  # exemple : <@&123456789012345678>         # ou "@everyone", "@here", "<@&ID_ROLE>"
+ANNOUNCE_MENTION = "@here"  # exemple : <@&123456789012345678>         # ou "@everyone", "@here", "<@&ID_ROLE>"
 
 # --- Vérification d'image ---
 def message_has_image(message):
