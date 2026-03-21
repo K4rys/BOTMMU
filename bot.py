@@ -477,13 +477,13 @@ async def participants(ctx):
 
 @bot.command()
 async def help_points(ctx):
-    embed = discord.Embed(title="🎨 AIDE DU BOT MAKEUP POINTS", description="Système de points pour votre association !", color=discord.Color.purple())
+    embed = discord.Embed(title="🎨 AIDE DU BOT MAKEUP POINTS", description="Petit robot crée par Karys, la Présidente ! ", color=discord.Color.purple())
     embed.add_field(
         name="📸 COMMENT GAGNER DES POINTS ?",
         value=f"Postez une **photo de makeup** dans #{MAKEUP_CHANNEL_NAME}\n"
               "• 1er makeup du mois → **1 point**\n"
               "• Puis **1 point** tous les **3 makeups**\n"
-              "• Les compteurs se réinitialisent chaque **mois**",
+              "• Les compteurs se réinitialisent chaque **mois** donc attention aux délais !",
         inline=False
     )
     embed.add_field(
