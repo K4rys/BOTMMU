@@ -3,6 +3,8 @@ from discord.ext import commands, tasks
 from datetime import datetime, timedelta
 import json
 import os
+import asyncio
+
 import sys
 
 # Configuration
@@ -11,6 +13,7 @@ intents.message_content = True
 intents.members = True
 intents.guilds = True
 intents.messages = True
+SCHEDULED_FILE = 'scheduled.json'
 
 bot = commands.Bot(command_prefix='!', intents=intents)
 
@@ -71,6 +74,8 @@ async def on_ready():
     print(f"🖼️ Mode images uniquement: ACTIVÉ")
     print(f"{'='*50}\n")
     check_new_month.start()
+    check_scheduled_messages.start()
+    
 
 @bot.event
 async def on_message(message):
@@ -101,6 +106,10 @@ async def on_message(message):
         old_points = calculate_points(new_count - 1)
         new_points = calculate_points(new_count)
         save_data(data)
+        # Ajout des réactions automatiques (seulement si le message n'est pas du bot)
+        if not message.author.bot:
+            await message.add_reaction("❤️")
+
 
         if new_points > old_points:
             embed = discord.Embed(
@@ -202,6 +211,43 @@ async def check_new_month():
     if changed:
         save_data(data)
         print(f"📅 Nouveau mois détecté : {current_month} - Compteurs réinitialisés")
+
+def load_scheduled():
+    if os.path.exists(SCHEDULED_FILE):
+        with open(SCHEDULED_FILE, 'r') as f:
+            return json.load(f)
+    return []
+
+def save_scheduled(data):
+    with open(SCHEDULED_FILE, 'w') as f:
+        json.dump(data, f, indent=4)
+
+scheduled_data = load_scheduled()
+
+@tasks.loop(minutes=1)
+async def check_scheduled_messages():
+    now = datetime.now()
+    current_weekday = now.weekday()  # 0 = lundi, 6 = dimanche
+    current_hour = now.hour
+    current_minute = now.minute
+    today_str = now.strftime("%Y-%m-%d")
+
+    for schedule in scheduled_data:
+        # Vérifier le jour et l'heure
+        if (schedule["day"] == current_weekday and
+            schedule["hour"] == current_hour and
+            schedule["minute"] == current_minute):
+            # Vérifier si déjà envoyé aujourd'hui
+            last_sent = schedule.get("last_sent", "")
+            if last_sent == today_str:
+                continue
+
+            channel = bot.get_channel(schedule["channel_id"])
+            if channel:
+                await channel.send(schedule["message"])
+                schedule["last_sent"] = today_str
+                save_scheduled(scheduled_data)
+                print(f"📢 Annonce programmée envoyée dans #{channel.name}")
 
 # ===== COMMANDES ADMIN =====
 @bot.command()
@@ -475,16 +521,105 @@ async def help_points(ctx):
               "`!points @membre` - Voir les points d'un membre\n"
               "`!leaderboard` - Voir le classement\n"
               "`!stats` - Statistiques du mois\n"
+              "`!participants` - Liste de tous les participants\n"
               "`!help_points` - Afficher cette aide\n\n"
               "**Commandes admin :**\n"
               "`!reset_xp` - Réinitialiser tous les points\n"
               "`!reset_member_xp @membre` - Réinitialiser un membre\n"
-              "`!set_xp @membre nombre` - Définir le nombre de makeups",
+              "`!set_xp @membre nombre` - Définir le nombre de makeups\n"
+              "`!planifier` - Gérer les annonces programmées (add/list/remove)",
         inline=False
     )
     embed.set_footer(text="Bonne chance et faites de beaux makeups ! ✨")
     await ctx.send(embed=embed)
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def planifier(ctx, action, *, args=None):
+    """Gère les annonces programmées.
+    Sous-commandes :
+    !planifier add #salon lundi 18:00 "Message"
+    !planifier list
+    !planifier remove <id>
+    """
+    if action == "add":
+        # Format: !planifier add #salon lundi 18:00 "Message"
+        parts = args.split(' ', 3)
+        if len(parts) < 4:
+            await ctx.send("❌ Format : !planifier add #salon lundi 18:00 \"Message\"")
+            return
+        channel_mention = parts[0]
+        day_name = parts[1].lower()
+        hour_min = parts[2]
+        message = parts[3].strip('"')
 
+        # Récupérer l'ID du salon
+        if not channel_mention.startswith('<#') or not channel_mention.endswith('>'):
+            await ctx.send("❌ Mentionne un salon valide (ex: #annonces)")
+            return
+        channel_id = int(channel_mention[2:-1])
+
+        # Convertir le jour en nombre (lundi=0)
+        days = {
+            "lundi": 0, "mardi": 1, "mercredi": 2, "jeudi": 3,
+            "vendredi": 4, "samedi": 5, "dimanche": 6
+        }
+        if day_name not in days:
+            await ctx.send("❌ Jour invalide. Utilise : lundi, mardi, mercredi, jeudi, vendredi, samedi, dimanche")
+            return
+        day = days[day_name]
+
+        # Convertir l'heure
+        try:
+            hour, minute = map(int, hour_min.split(':'))
+            if not (0 <= hour <= 23 and 0 <= minute <= 59):
+                raise ValueError
+        except:
+            await ctx.send("❌ Heure invalide. Format : HH:MM (ex: 18:00)")
+            return
+
+        # Stocker
+        new_schedule = {
+            "id": len(scheduled_data) + 1,
+            "channel_id": channel_id,
+            "day": day,
+            "hour": hour,
+            "minute": minute,
+            "message": message,
+            "last_sent": ""
+        }
+        scheduled_data.append(new_schedule)
+        save_scheduled(scheduled_data)
+        await ctx.send(f"✅ Annonce programmée : tous les {day_name} à {hour:02d}:{minute:02d} dans <#{channel_id}>.")
+
+    elif action == "list":
+        if not scheduled_data:
+            await ctx.send("📭 Aucune annonce programmée.")
+            return
+        description = ""
+        for s in scheduled_data:
+            # Convertir jour numéro en nom
+            day_names = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
+            day_name = day_names[s["day"]]
+            description += f"**ID {s['id']}** : {day_name} {s['hour']:02d}:{s['minute']:02d} → <#{s['channel_id']}> : {s['message'][:50]}...\n"
+        embed = discord.Embed(title="📅 Annonces programmées", description=description, color=discord.Color.blue())
+        await ctx.send(embed=embed)
+
+    elif action == "remove":
+        try:
+            id_to_remove = int(args)
+            global scheduled_data
+            new_list = [s for s in scheduled_data if s["id"] != id_to_remove]
+            if len(new_list) == len(scheduled_data):
+                await ctx.send(f"❌ Aucune annonce avec l'ID {id_to_remove}.")
+                return
+            scheduled_data = new_list
+            save_scheduled(scheduled_data)
+            await ctx.send(f"✅ Annonce ID {id_to_remove} supprimée.")
+        except:
+            await ctx.send("❌ Utilisation : !planifier remove <id>")
+
+    else:
+        await ctx.send("❌ Action inconnue. Utilise : add, list, remove")
 
 # ===== LANCEMENT =====
 if __name__ == "__main__":
