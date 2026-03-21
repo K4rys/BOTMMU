@@ -100,7 +100,6 @@ def message_has_image(message):
 # --- Tâches ---
 @tasks.loop(hours=1)
 async def check_challenge_expiry():
-    """Vérifie toutes les heures si un nouveau défi commence et envoie une annonce."""
     today = datetime.now().date()
     print(f"🔍 Vérification des défis du jour : {today}")
 
@@ -114,9 +113,18 @@ async def check_challenge_expiry():
                     print(f"❌ Salon d'annonces introuvable (ID: {ANNOUNCE_CHANNEL_ID})")
                     continue
 
+                # --- ENVOI DE LA MENTION AVEC allowed_mentions ---
+                if ANNOUNCE_MENTION:
+                    # On construit un message contenant la mention
+                    mention_message = ANNOUNCE_MENTION
+                    # On autorise explicitement toutes les mentions
+                    allowed = discord.AllowedMentions(everyone=True, roles=True, users=True)
+                    await channel.send(content=mention_message, allowed_mentions=allowed)
+
+                # --- ENVOI DE L'EMBED ---
                 embed = discord.Embed(
                     title="🎉 NOUVEAU DÉFI !",
-                    description=f"{ANNOUNCE_MENTION}\n\n**{ch['theme']}**\n{ch['description']}",
+                    description=f"**{ch['theme']}**\n{ch['description']}",
                     color=discord.Color.purple(),
                     timestamp=datetime.now()
                 )
@@ -124,13 +132,11 @@ async def check_challenge_expiry():
                 embed.add_field(name="🎁 Bonus", value=f"{ch['bonus']} point supplémentaire par participation !", inline=False)
                 embed.set_footer(text="Participez en postant une photo avec le thème dans #makeups")
 
-                try:
-                    await channel.send(embed=embed)
-                    ch["announced"] = True
-                    save_challenges(challenges)
-                    print(f"✅ Annonce envoyée pour le défi {ch['theme']}")
-                except Exception as e:
-                    print(f"❌ Erreur lors de l'envoi : {e}")
+                await channel.send(embed=embed)
+
+                ch["announced"] = True
+                save_challenges(challenges)
+                print(f"✅ Annonce envoyée pour le défi {ch['theme']}")
             else:
                 print(f"ℹ️ Défi déjà annoncé : {ch['theme']}")
 
