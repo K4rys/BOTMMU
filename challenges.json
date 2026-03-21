@@ -1,18 +1,210 @@
 [
-  {
-    "id": 1,
-    "theme": "maquillage bleu",
-    "start_date": "2026-03-21",
-    "end_date": "2026-03-28",
-    "bonus": 1,
-    "description": "Postez un maquillage aux nuances de bleu !"
-  },
-  {
-    "id": 2,
-    "theme": "smokey eye",
-    "start_date": "2026-03-28",
-    "end_date": "2026-04-04",
-    "bonus": 1,
-    "description": "Réalisez un smoky eye parfait !"
-  }
+    {
+        "id": 1,
+        "theme": "Maquillage bleu",
+        "description": "Postez un makeup avec du bleu comme couleur principale",
+        "start_date": "2026-03-28",
+        "end_date": "2026-04-03",
+        "bonus": 1,
+        "announced": false
+    },
+    {
+        "id": 2,
+        "theme": "Smokey eye",
+        "description": "Réalisez un smoky eye (gris, noir ou marron)",
+        "start_date": "2026-04-04",
+        "end_date": "2026-04-10",
+        "bonus": 1,
+        "announced": false
+    },
+    {
+        "id": 3,
+        "theme": "Maquillage floral",
+        "description": "Inspirez-vous des fleurs : pétales, couleurs pastel, motifs",
+        "start_date": "2026-04-11",
+        "end_date": "2026-04-17",
+        "bonus": 1,
+        "announced": false
+    },
+    {
+        "id": 4,
+        "theme": "Look de soirée",
+        "description": "Un maquillage glamour pour sortir",
+        "start_date": "2026-04-18",
+        "end_date": "2026-04-24",
+        "bonus": 1,
+        "announced": false
+    },
+    {
+        "id": 5,
+        "theme": "Maquillage arc-en-ciel",
+        "description": "Toutes les couleurs de l'arc-en-ciel sur votre visage",
+        "start_date": "2026-04-25",
+        "end_date": "2026-05-01",
+        "bonus": 1,
+        "announced": false
+    },
+    {
+        "id": 6,
+        "theme": "Maquillage naturel",
+        "description": "No makeup makeup, look frais et léger",
+        "start_date": "2026-05-02",
+        "end_date": "2026-05-08",
+        "bonus": 1,
+        "announced": false
+    },
+    {
+        "id": 7,
+        "theme": "Glitter explosion",
+        "description": "Paillettes, sequins, brillance à gogo",
+        "start_date": "2026-05-09",
+        "end_date": "2026-05-15",
+        "bonus": 1,
+        "announced": false
+    },
+    {
+        "id": 8,
+        "theme": "Maquillage rétro",
+        "description": "Inspiré des années 50, 60, 70, etc.",
+        "start_date": "2026-05-16",
+        "end_date": "2026-05-22",
+        "bonus": 1,
+        "announced": false
+    },
+    {
+        "id": 9,
+        "theme": "Maquillage animalier",
+        "description": "Effet léopard, zèbre, serpent, etc.",
+        "start_date": "2026-05-23",
+        "end_date": "2026-05-29",
+        "bonus": 1,
+        "announced": false
+    },
+    {
+        "id": 10,
+        "theme": "Maquillage coloré",
+        "description": "Jouez avec des couleurs vives et contrastées",
+        "start_date": "2026-05-30",
+        "end_date": "2026-06-05",
+        "bonus": 1,
+        "announced": false
+    },
+    {
+        "id": 11,
+        "theme": "Maquillage estival",
+        "description": "Bronze, corail, soleil, plage",
+        "start_date": "2026-06-06",
+        "end_date": "2026-06-12",
+        "bonus": 1,
+        "announced": false
+    },
+    {
+        "id": 12,
+        "theme": "Maquillage de plage",
+        "description": "Look frais, waterproof, inspiré de la mer",
+        "start_date": "2026-06-13",
+        "end_date": "2026-06-19",
+        "bonus": 1,
+        "announced": false
+    },
+    {
+        "id": 13,
+        "theme": "Maquillage fantasy",
+        "description": "Elfe, fée, licorne, créatures imaginaires",
+        "start_date": "2026-06-20",
+        "end_date": "2026-06-26",
+        "bonus": 1,
+        "announced": false
+    },
+    {
+        "id": 14,
+        "theme": "Maquillage néon",
+        "description": "Des couleurs fluorescentes qui brillent",
+        "start_date": "2026-06-27",
+        "end_date": "2026-07-03",
+        "bonus": 1,
+        "announced": false
+    },
+    {
+        "id": 15,
+        "theme": "Maquillage vintage",
+        "description": "Inspiration pin-up, années 20, 30, etc.",
+        "start_date": "2026-07-04",
+        "end_date": "2026-07-10",
+        "bonus": 1,
+        "announced": false
+    },
+    {
+        "id": 16,
+        "theme": "Maquillage métallique",
+        "description": "Or, argent, cuivre, effets métallisés",
+        "start_date": "2026-07-11",
+        "end_date": "2026-07-17",
+        "bonus": 1,
+        "announced": false
+    },
+    {
+        "id": 17,
+        "theme": "Maquillage de fête",
+        "description": "Préparez un look pour une soirée spéciale",
+        "start_date": "2026-07-18",
+        "end_date": "2026-07-24",
+        "bonus": 1,
+        "announced": false
+    },
+    {
+        "id": 18,
+        "theme": "Maquillage graphique",
+        "description": "Lignes nettes, formes géométriques",
+        "start_date": "2026-07-25",
+        "end_date": "2026-07-31",
+        "bonus": 1,
+        "announced": false
+    },
+    {
+        "id": 19,
+        "theme": "Maquillage minimaliste",
+        "description": "Moins c’est plus, épurez vos traits",
+        "start_date": "2026-08-01",
+        "end_date": "2026-08-07",
+        "bonus": 1,
+        "announced": false
+    },
+    {
+        "id": 20,
+        "theme": "Maquillage symétrique",
+        "description": "Jeu de miroir, design symétrique sur les deux yeux",
+        "start_date": "2026-08-08",
+        "end_date": "2026-08-14",
+        "bonus": 1,
+        "announced": false
+    },
+    {
+        "id": 21,
+        "theme": "Maquillage inspiré d’un film",
+        "description": "Recréez le maquillage d’un personnage de cinéma",
+        "start_date": "2026-08-15",
+        "end_date": "2026-08-21",
+        "bonus": 1,
+        "announced": false
+    },
+
+    {
+        "id": 22,
+        "theme": "Maquillage automnal",
+        "description": "Couleurs chaudes, feuilles mortes, orange, bordeaux",
+        "start_date": "2026-08-29",
+        "end_date": "2026-09-04",
+        "bonus": 1,
+        "announced": false
+    },
+    {
+        "id": 23,
+        "theme": "Maquillage inspiré d’un tableau",
+        "description": "Recréez une œuvre d’art célèbre",
+        "start_date": "2026-09-05",
+        "end_date": "2026-09-11",
+        "bonus": 1,
+        "announced": false
+    }
 ]
