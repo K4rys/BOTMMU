@@ -644,23 +644,58 @@ async def defi(ctx, action, *, args=None):
         save_challenges(challenges)
         await ctx.send(f"✅ Défi ajouté : **{theme}** du {start_date} au {end_date}.")
 
-    elif action == "list":
+       elif action == "list":
         if not challenges:
             await ctx.send("📭 Aucun défi enregistré.")
             return
-        embed = discord.Embed(title="📋 Liste des défis", color=discord.Color.blue())
+
+        # Trier les défis par date de début
+        challenges_sorted = sorted(challenges, key=lambda x: x["start_date"])
         today = datetime.now().date()
-        for c in challenges:
-            start = datetime.strptime(c["start_date"], "%Y-%m-%d").date()
-            end = datetime.strptime(c["end_date"], "%Y-%m-%d").date()
-            status = "🟢 actif" if start <= today <= end else "⏳ à venir" if today < start else "🔒 terminé"
+
+        # Séparer actif, à venir
+        active = None
+        upcoming = []
+        for ch in challenges_sorted:
+            start = datetime.strptime(ch["start_date"], "%Y-%m-%d").date()
+            end = datetime.strptime(ch["end_date"], "%Y-%m-%d").date()
+            if start <= today <= end:
+                active = ch
+            elif start > today:
+                upcoming.append(ch)
+            # On ignore les terminés
+
+        embed = discord.Embed(title="📋 DÉFIS", color=discord.Color.blue(), timestamp=datetime.now())
+
+        # Défi actif
+        if active:
             embed.add_field(
-                name=f"N°{c['id']} : {c['theme']}",
-                value=f"📅 {c['start_date']} → {c['end_date']}\n"
-                      f"📝 {c['description']}\n"
-                      f"Bonus : {c['bonus']} point\n"
-                      f"{status}",
+                name=f"🟢 EN COURS : {active['theme']}",
+                value=f"📅 {active['start_date']} → {active['end_date']}\n"
+                      f"📝 {active['description']}\n"
+                      f"🎁 Bonus : {active['bonus']} point",
                 inline=False
+            )
+        else:
+            embed.add_field(name="🟢 Aucun défi actif", value="Le prochain défi commencera bientôt !", inline=False)
+
+        # Prochains défis (max 3)
+        if upcoming:
+            next_challenges = upcoming[:3]
+            value = ""
+            for ch in next_challenges:
+                value += f"**{ch['theme']}**\n"
+                value += f"📅 {ch['start_date']} → {ch['end_date']}\n"
+                value += f"📝 {ch['description']}\n"
+                value += f"🎁 Bonus : {ch['bonus']} point\n\n"
+            embed.add_field(name="⏳ PROCHAINS DÉFIS", value=value.strip(), inline=False)
+        else:
+            embed.add_field(name="⏳ Aucun autre défi à venir", value="C'est tout pour l'instant !", inline=False)
+
+        # Ajouter un petit pied de page avec le nombre total
+        embed.set_footer(text=f"Total des défis : {len(challenges)}")
+
+        await ctx.send(embed=embed)
             )
         await ctx.send(embed=embed)
 
