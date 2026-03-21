@@ -710,6 +710,35 @@ async def help_points(ctx):
     )
     embed.set_footer(text="Bonne chance et faites de beaux makeups ! ✨")
     await ctx.send(embed=embed)
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def test_annonce(ctx, challenge_id: int):
+    """Test : force l'envoi de l'annonce pour un défi donné (admin)"""
+    ch = next((c for c in challenges if c["id"] == challenge_id), None)
+    if not ch:
+        await ctx.send("❌ Défi introuvable.")
+        return
+
+    channel = bot.get_channel(ANNOUNCE_CHANNEL_ID)
+    if channel is None:
+        await ctx.send(f"❌ Salon d'annonces introuvable (ID: {ANNOUNCE_CHANNEL_ID})")
+        return
+
+    embed = discord.Embed(
+        title="🎉 NOUVEAU DÉFI ! (TEST)",
+        description=f"{ANNOUNCE_MENTION}\n\n**{ch['theme']}**\n{ch['description']}",
+        color=discord.Color.purple(),
+        timestamp=datetime.now()
+    )
+    embed.add_field(name="📅 Dates", value=f"Du {ch['start_date']} au {ch['end_date']}", inline=False)
+    embed.add_field(name="🎁 Bonus", value=f"{ch['bonus']} point supplémentaire par participation !", inline=False)
+    embed.set_footer(text="Participez en postant une photo avec le thème dans #makeups")
+
+    try:
+        await channel.send(embed=embed)
+        await ctx.send(f"✅ Annonce de test envoyée pour le défi **{ch['theme']}** dans <#{ANNOUNCE_CHANNEL_ID}>.")
+    except Exception as e:
+        await ctx.send(f"❌ Erreur lors de l'envoi : {e}")
 
 # --- Lancement ---
 if __name__ == "__main__":
