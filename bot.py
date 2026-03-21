@@ -614,7 +614,7 @@ async def planifier(ctx, action, *, args=None):
 @bot.command()
 @commands.has_permissions(administrator=True)
 async def defi(ctx, action, *, args=None):
-    global challenges
+    global challenges   # <-- placé en premier
     if action == "add":
         import re
         parts = re.findall(r'"([^"]*)"', args)
@@ -638,22 +638,20 @@ async def defi(ctx, action, *, args=None):
             "description": description,
             "start_date": start_date.strftime("%Y-%m-%d"),
             "end_date": end_date.strftime("%Y-%m-%d"),
-            "bonus": 1
+            "bonus": 1,
+            "announced": False
         }
         challenges.append(new_challenge)
         save_challenges(challenges)
         await ctx.send(f"✅ Défi ajouté : **{theme}** du {start_date} au {end_date}.")
 
-       elif action == "list":
+    elif action == "list":
         if not challenges:
             await ctx.send("📭 Aucun défi enregistré.")
             return
 
-        # Trier les défis par date de début
         challenges_sorted = sorted(challenges, key=lambda x: x["start_date"])
         today = datetime.now().date()
-
-        # Séparer actif, à venir
         active = None
         upcoming = []
         for ch in challenges_sorted:
@@ -663,11 +661,9 @@ async def defi(ctx, action, *, args=None):
                 active = ch
             elif start > today:
                 upcoming.append(ch)
-            # On ignore les terminés
 
         embed = discord.Embed(title="📋 DÉFIS", color=discord.Color.blue(), timestamp=datetime.now())
 
-        # Défi actif
         if active:
             embed.add_field(
                 name=f"🟢 EN COURS : {active['theme']}",
@@ -679,7 +675,6 @@ async def defi(ctx, action, *, args=None):
         else:
             embed.add_field(name="🟢 Aucun défi actif", value="Le prochain défi commencera bientôt !", inline=False)
 
-        # Prochains défis (max 3)
         if upcoming:
             next_challenges = upcoming[:3]
             value = ""
@@ -692,11 +687,7 @@ async def defi(ctx, action, *, args=None):
         else:
             embed.add_field(name="⏳ Aucun autre défi à venir", value="C'est tout pour l'instant !", inline=False)
 
-        # Ajouter un petit pied de page avec le nombre total
         embed.set_footer(text=f"Total des défis : {len(challenges)}")
-
-        await ctx.send(embed=embed)
-            )
         await ctx.send(embed=embed)
 
     elif action == "remove":
