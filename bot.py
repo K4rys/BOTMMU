@@ -41,6 +41,40 @@ def calculate_points(count):
         return 0
     return 1 + (count - 1) // 3
 
+CHALLENGES_FILE = 'challenges.json'
+
+def load_challenges():
+    if os.path.exists(CHALLENGES_FILE):
+        with open(CHALLENGES_FILE, 'r') as f:
+            return json.load(f)
+    return []
+
+def save_challenges(challenges):
+    with open(CHALLENGES_FILE, 'w') as f:
+        json.dump(challenges, f, indent=4)
+
+challenges = load_challenges()
+
+def get_active_challenge():
+    """Retourne le défi actif en fonction de la date du jour"""
+    today = datetime.now().date()
+    for ch in challenges:
+        start = datetime.strptime(ch["start_date"], "%Y-%m-%d").date()
+        end = datetime.strptime(ch["end_date"], "%Y-%m-%d").date()
+        if start <= today <= end:
+            return ch
+    return None
+
+def is_challenge_active_for_date(date_str, theme):
+    """Vérifie si un défi est actif pour une date donnée"""
+    date = datetime.strptime(date_str, "%Y-%m-%d").date()
+    for ch in challenges:
+        start = datetime.strptime(ch["start_date"], "%Y-%m-%d").date()
+        end = datetime.strptime(ch["end_date"], "%Y-%m-%d").date()
+        if start <= date <= end and ch["theme"].lower() == theme.lower():
+            return ch
+    return None
+
 # Salon à surveiller
 MAKEUP_CHANNEL_NAME = "makeups"
 REPORT_CHANNEL_NAME = "botlxp"   
@@ -75,6 +109,7 @@ async def on_ready():
     print(f"{'='*50}\n")
     check_new_month.start()
     check_scheduled_messages.start()
+    check_challenge_expiry.start()
     
 
 @bot.event
@@ -94,11 +129,10 @@ async def on_message(message):
 
         user_id = str(message.author.id)
         current_month = get_current_month()
-
         if user_id not in data:
-            data[user_id] = {"count": 0, "month": current_month}
+            data[user_id] = {"count": 0, "month": current_month, "bonus_points": 0}
         if data[user_id]["month"] != current_month:
-            data[user_id] = {"count": 0, "month": current_month}
+            data[user_id] = {"count": 0, "month": current_month, "bonus_points": 0}
             save_data(data)
 
         data[user_id]["count"] += 1
@@ -121,6 +155,25 @@ async def on_message(message):
             embed.add_field(name="⭐ Total points", value=f"{new_points}", inline=True)
             embed.set_footer(text="Continuez comme ça ! 🎨")
             await message.channel.send(embed=embed)
+                # ... (après save_data(data))
+
+        # Bonus de défi
+        active_challenge = get_active_challenge()
+        if active_challenge:
+            # Vérifier si le message contient le thème (insensible à la casse)
+            theme = active_challenge["theme"].lower()
+            if theme in message.content.lower():
+                # Ajouter un bonus
+                bonus_key = f"bonus_{active_challenge['id']}"
+                if bonus_key not in data[user_id]:
+                    data[user_id][bonus_key] = 0.5
+                data[user_id][bonus_key] += active_challenge["bonus"]
+                save_data(data)
+                
+                # Envoyer un message de félicitations
+                await message.channel.send(
+                    f"{message.author.mention} a participé au défi **{active_challenge['theme']}** ! +{active_challenge['bonus']} point bonus 🎉"
+                )
 
     await bot.process_commands(message)
 async def send_monthly_report(month):
@@ -186,7 +239,13 @@ async def send_monthly_report(month):
     await report_channel.send(embed=embed)
     print(f"📊 Bilan mensuel envoyé dans #{REPORT_CHANNEL_NAME}")
 
-
+@tasks.loop(hours=1)
+async def check_challenge_expiry():
+    """Vérifie toutes les heures si un défi a expiré et peut afficher un message"""
+    active = get_active_challenge()
+    if active:
+        # Ici tu pourrais ajouter une notification quand un nouveau défi commence
+        pass
 @tasks.loop(hours=24)
 async def check_new_month():
     """Vérifie chaque jour si le mois a changé et envoie un bilan"""
@@ -325,7 +384,7 @@ async def set_xp(ctx, member: discord.Member, count: int):
     data[uid]["month"] = current_month
     save_data(data)
     
-    points = calculate_points(count)
+    points = calculate_points(count) + data[uid].get("bonus_points", 0)
     await ctx.send(f"✅ {member.display_name} a maintenant **{count}** makeups ce mois-ci ({points} points LXP).")
 
 # ===== COMMANDES UTILISATEURS =====
@@ -440,6 +499,88 @@ async def stats(ctx):
     
     await ctx.send(embed=embed)
 @bot.command()
+@commands.has_permissions(administrator=True)
+async def defi(ctx, action, *, args=None):
+    """Gère les défis hebdomadaires.
+    Sous-commandes :
+    !defi add "thème" "description" durée_jours
+    !defi list
+    !defi remove <id>
+    """
+    global challenges
+    if action == "add":
+        # Format: !defi add "maquillage bleu" "Description" 7
+        try:
+            # On utilise le quote parsing simple
+            import re
+            # Extraire les parties entre guillemets
+            parts = re.findall(r'"([^"]*)"', args)
+            if len(parts) < 2:
+                await ctx.send("❌ Format : !defi add \"thème\" \"description\" durée")
+                return
+            theme = parts[0]
+            description = parts[1]
+            # Le reste après les guillemets doit être la durée
+            remaining = args.replace(f'"{theme}"', "").replace(f'"{description}"', "").strip()
+            try:
+                duration = int(remaining)
+            except:
+                await ctx.send("❌ La durée doit être un nombre de jours.")
+                return
+
+            start_date = datetime.now().date()
+            end_date = start_date + timedelta(days=duration)
+            new_id = max([c["id"] for c in challenges], default=0) + 1
+            new_challenge = {
+                "id": new_id,
+                "theme": theme,
+                "description": description,
+                "start_date": start_date.strftime("%Y-%m-%d"),
+                "end_date": end_date.strftime("%Y-%m-%d"),
+                "bonus": 1
+            }
+            challenges.append(new_challenge)
+            save_challenges(challenges)
+            await ctx.send(f"✅ Défi ajouté : **{theme}** du {start_date} au {end_date}.")
+        except Exception as e:
+            await ctx.send(f"❌ Erreur : {e}")
+
+    elif action == "list":
+        if not challenges:
+            await ctx.send("📭 Aucun défi enregistré.")
+            return
+        embed = discord.Embed(title="📋 Liste des défis", color=discord.Color.blue())
+        today = datetime.now().date()
+        for c in challenges:
+            start = datetime.strptime(c["start_date"], "%Y-%m-%d").date()
+            end = datetime.strptime(c["end_date"], "%Y-%m-%d").date()
+            status = "🟢 actif" if start <= today <= end else "⏳ à venir" if today < start else "🔒 terminé"
+            embed.add_field(
+                name=f"ID {c['id']} : {c['theme']}",
+                value=f"📅 {c['start_date']} → {c['end_date']}\n"
+                      f"📝 {c['description']}\n"
+                      f"🎁 Bonus : {c['bonus']} point\n"
+                      f"📊 {status}",
+                inline=False
+            )
+        await ctx.send(embed=embed)
+
+    elif action == "remove":
+        try:
+            id_to_remove = int(args)
+            new_list = [c for c in challenges if c["id"] != id_to_remove]
+            if len(new_list) == len(challenges):
+                await ctx.send(f"❌ Aucun défi avec l'ID {id_to_remove}.")
+                return
+            challenges = new_list
+            save_challenges(challenges)
+            await ctx.send(f"✅ Défi ID {id_to_remove} supprimé.")
+        except:
+            await ctx.send("❌ Utilisation : !defi remove <id>")
+
+    else:
+        await ctx.send("❌ Action inconnue. Utilise : add, list, remove")
+@bot.command()
 async def participants(ctx):
     """Affiche la liste de tous les participants du mois avec leurs points"""
     current_month = get_current_month()
@@ -513,6 +654,15 @@ async def help_points(ctx):
               "• 1er makeup du mois → **1 point**\n"
               "• Puis **1 point** tous les **3 makeups**\n"
               "• Les compteurs se réinitialisent chaque **mois**",
+        inline=False
+    )
+    embed.add_field(
+        name="🎯 DÉFIS HEBDOMADAIRES",
+        value="Participez aux défis thématiques pour gagner **1 point bonus** par défi !\n"
+              "`!defi list` - Voir les défis en cours, à venir et terminés\n\n"
+              "**Commandes admin :**\n"
+              "`!defi add \"thème\" \"description\" durée` - Créer un nouveau défi\n"
+              "`!defi remove <id>` - Supprimer un défi",
         inline=False
     )
     embed.add_field(
