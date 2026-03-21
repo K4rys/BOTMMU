@@ -80,7 +80,8 @@ def get_active_challenge():
 # --- Constantes des salons ---
 MAKEUP_CHANNEL_NAME = "makeups"
 REPORT_CHANNEL_NAME = "botlxp"
-ANNOUNCE_CHANNEL_ID = 1380938525599338506  # Remplace par l'ID de ton salon #annonces
+ANNOUNCE_CHANNEL_ID = 1484528182672756766 
+ANNOUNCE_MENTION = "@Présidente" # Remplace par l'ID de ton salon #annonces
 
 # --- Vérification d'image ---
 def message_has_image(message):
@@ -96,6 +97,45 @@ def message_has_image(message):
         return True
     return False
 
+@tasks.loop(hours=1)
+async def check_challenge_expiry():
+    """Vérifie toutes les heures si un nouveau défi commence et envoie une annonce avec mention."""
+    today = datetime.now().date()
+    print(f"🔍 Vérification des défis du jour : {today}")
+
+    for ch in challenges:
+        start_date = datetime.strptime(ch["start_date"], "%Y-%m-%d").date()
+        if start_date == today:
+            print(f"🎯 Défi trouvé : {ch['theme']} (début aujourd'hui)")
+            if not ch.get("announced", False):
+                channel = bot.get_channel(ANNOUNCE_CHANNEL_ID)
+                if channel is None:
+                    print(f"❌ Salon d'annonces introuvable (ID: {ANNOUNCE_CHANNEL_ID})")
+                    continue
+
+                # Construction de l'embed avec la mention
+                embed = discord.Embed(
+                    title="🎉 NOUVEAU DÉFI !",
+                    description=f"{ANNOUNCE_MENTION}\n\n**{ch['theme']}**\n{ch['description']}",
+                    color=discord.Color.purple(),
+                    timestamp=datetime.now()
+                )
+                embed.add_field(name="📅 Dates", value=f"Du {ch['start_date']} au {ch['end_date']}", inline=False)
+                embed.add_field(name="🎁 Bonus", value=f"{ch['bonus']} point supplémentaire par participation !", inline=False)
+                embed.set_footer(text="Participez en postant une photo avec le thème dans #makeups")
+
+                # Envoi de l'annonce
+                try:
+                    await channel.send(embed=embed)
+                    ch["announced"] = True
+                    save_challenges(challenges)
+                    print(f"✅ Annonce envoyée pour le défi {ch['theme']} avec mention {ANNOUNCE_MENTION}")
+                except discord.Forbidden:
+                    print(f"❌ Permission manquante pour mentionner {ANNOUNCE_MENTION}. Vérifie les permissions du bot.")
+                except Exception as e:
+                    print(f"❌ Erreur lors de l'envoi de l'annonce : {e}")
+            else:
+                print(f"ℹ️ Défi déjà annoncé : {ch['theme']}")
 # --- Événements ---
 @bot.event
 async def on_ready():
