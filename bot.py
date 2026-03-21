@@ -517,6 +517,7 @@ async def help_points(ctx):
 @bot.command()
 @commands.has_permissions(administrator=True)
 async def planifier(ctx, action, *, args=None):
+    global scheduled_data
     if action == "add":
         parts = args.split(' ', 3)
         if len(parts) < 4:
@@ -570,7 +571,6 @@ async def planifier(ctx, action, *, args=None):
     elif action == "remove":
         try:
             id_to_remove = int(args)
-            global scheduled_data
             new_list = [s for s in scheduled_data if s["id"] != id_to_remove]
             if len(new_list) == len(scheduled_data):
                 await ctx.send(f"❌ Aucune annonce avec l'ID {id_to_remove}.")
@@ -583,7 +583,6 @@ async def planifier(ctx, action, *, args=None):
 
     else:
         await ctx.send("❌ Action inconnue. Utilise : add, list, remove")
-
 # --- Commandes défis ---
 @bot.command()
 @commands.has_permissions(administrator=True)
@@ -653,7 +652,6 @@ async def defi(ctx, action, *, args=None):
 
     else:
         await ctx.send("❌ Action inconnue. Utilise : add, list, remove")
-
 # --- Lancement ---
 if __name__ == "__main__":
     TOKEN = os.getenv('DISCORD_TOKEN')
