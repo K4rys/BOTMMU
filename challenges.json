@@ -8,6 +8,15 @@
         "bonus": 1,
         "announced": false
     },
+      {
+        "id": 33,
+        "theme": "Maquillage bleu",
+        "description": "Postez un makeup avec du bleu comme couleur principale",
+        "start_date": "2026-03-21",
+        "end_date": "2026-04-03",
+        "bonus": 1,
+        "announced": false
+    },
     {
         "id": 2,
         "theme": "Smokey eye",
