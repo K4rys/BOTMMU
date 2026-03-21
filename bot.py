@@ -114,6 +114,91 @@ async def on_message(message):
             await message.channel.send(embed=embed)
 
     await bot.process_commands(message)
+async def send_monthly_report(month):
+    """Envoie un bilan du mois passé dans le salon de rapport"""
+    participants = []
+    for uid, info in data.items():
+        if info.get("month") == month and info.get("count", 0) > 0:
+            count = info["count"]
+            points = calculate_points(count)
+            participants.append((uid, count, points))
+    
+    if not participants:
+        return
+    
+    participants.sort(key=lambda x: x[2], reverse=True)
+    
+    report_channel = None
+    for guild in bot.guilds:
+        for channel in guild.text_channels:
+            if channel.name == REPORT_CHANNEL_NAME:
+                report_channel = channel
+                break
+        if report_channel:
+            break
+    
+    if not report_channel:
+        print(f"❌ Salon '{REPORT_CHANNEL_NAME}' introuvable pour le bilan mensuel.")
+        return
+    
+    total_makeups = sum(p[1] for p in participants)
+    total_points = sum(p[2] for p in participants)
+    
+    embed = discord.Embed(
+        title=f"📊 BILAN MENSUEL - {month}",
+        description=f"Voici le récapitulatif du mois de **{month}** !",
+        color=discord.Color.gold(),
+        timestamp=datetime.now()
+    )
+    
+    embed.add_field(
+        name="📈 RÉSUMÉ",
+        value=f"**👥 Participants :** {len(participants)}\n"
+              f"**📸 Makeups :** {total_makeups}\n"
+              f"**⭐ Points :** {total_points}",
+        inline=False
+    )
+    
+    ranking = ""
+    for i, (uid, count, points) in enumerate(participants[:25], 1):
+        try:
+            user = await bot.fetch_user(int(uid))
+            name = user.display_name if user else f"ID:{uid[:8]}"
+        except:
+            name = f"ID:{uid[:8]}"
+        
+        medal = "🥇 " if i == 1 else "🥈 " if i == 2 else "🥉 " if i == 3 else ""
+        ranking += f"{medal}**{i}.** {name} – **{points}** pt(s) ({count} makeup(s))\n"
+    
+    if len(participants) > 25:
+        ranking += f"\n*... et {len(participants) - 25} autres participants*"
+    
+    embed.add_field(name="🏆 CLASSEMENT", value=ranking or "Aucun participant", inline=False)
+    await report_channel.send(embed=embed)
+    print(f"📊 Bilan mensuel envoyé dans #{REPORT_CHANNEL_NAME}")
+
+@tasks.loop(hours=24)
+async def check_new_month():
+    """Vérifie chaque jour si le mois a changé et envoie un bilan"""
+    current_month = get_current_month()
+    previous_month = (datetime.now().replace(day=1) - timedelta(days=1)).strftime("%Y-%m")
+    
+    # Vérifier s'il y a encore des données de l'ancien mois
+    has_old_data = any(info.get("month") == previous_month for info in data.values())
+    
+    if has_old_data:
+        await send_monthly_report(previous_month)
+    
+    # Réinitialiser les compteurs pour le nouveau mois
+    changed = False
+    for uid, info in data.items():
+        if info["month"] != current_month:
+            info["count"] = 0
+            info["month"] = current_month
+            changed = True
+    if changed:
+        save_data(data)
+        print(f"📅 Nouveau mois détecté : {current_month} - Compteurs réinitialisés")
 
 @tasks.loop(hours=24)
 async def check_new_month():
