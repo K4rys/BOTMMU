@@ -3,8 +3,6 @@ from discord.ext import commands, tasks
 from datetime import datetime, timedelta
 import json
 import os
-
-from py3pin.Pinterest import Pinterest
 import sys
 import re
 
