@@ -3,6 +3,7 @@ from discord.ext import commands, tasks
 from datetime import datetime, timedelta
 import json
 import os
+import aiohttp
 import sys
 import re
 
@@ -761,6 +762,23 @@ async def test_annonce(ctx, challenge_id: int):
         await ctx.send(f"✅ Annonce de test envoyée pour le défi **{ch['theme']}** dans <#{ANNOUNCE_CHANNEL_ID}>.")
     except Exception as e:
         await ctx.send(f"❌ Erreur lors de l'envoi : {e}")
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def admin_add_makeup(ctx, member: discord.Member, nombre: int = 1):
+    """Ajoute manuellement des makeups à un membre (admin)"""
+    if nombre <= 0:
+        await ctx.send("❌ Le nombre doit être positif.")
+        return
+    uid = str(member.id)
+    current_month = get_current_month()
+    if uid not in data:
+        data[uid] = {"count": 0, "month": current_month, "bonus_points": 0}
+    if data[uid]["month"] != current_month:
+        data[uid] = {"count": 0, "month": current_month, "bonus_points": 0}
+    data[uid]["count"] += nombre
+    save_data(data)
+    points = calculate_points(data[uid]["count"]) + data[uid].get("bonus_points", 0)
+    await ctx.send(f"✅ Ajout de **{nombre}** makeup(s) à {member.display_name}. Il a maintenant {data[uid]['count']} makeups ({points} points).")
 
 # --- Lancement ---
 if __name__ == "__main__":
