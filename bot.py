@@ -3,7 +3,8 @@ from discord.ext import commands, tasks
 from datetime import datetime, timedelta
 import json
 import os
-import aiohttp
+
+from py3pin.Pinterest import Pinterest
 import sys
 import re
 
@@ -794,6 +795,177 @@ async def admin_add_makeup(ctx, member: discord.Member, nombre: int = 1):
     save_data(data)
     points = calculate_points(data[uid]["count"]) + data[uid].get("bonus_points", 0)
     await ctx.send(f"✅ Ajout de **{nombre}** makeup(s) à {member.display_name}. Il a maintenant {data[uid]['count']} makeups ({points} points).")
+
+
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def concours_start(ctx):
+    """Lance un concours : les membres s'inscrivent via réaction"""
+    global contest
+    if contest["active"]:
+        await ctx.send("❌ Un concours est déjà en cours.")
+        return
+
+    embed = discord.Embed(
+        title="🎨 CONCOURS DU MEILLEUR MAKEUP 🎨",
+        description="Participez en postant votre meilleur makeup du mois dans #makeups, puis réagissez avec ✅ sur ce message pour être inscrit !\n\nLe vote aura lieu plus tard.",
+        color=discord.Color.gold()
+    )
+    msg = await ctx.send(embed=embed)
+    await msg.add_reaction("✅")
+
+    contest = {
+        "active": True,
+        "participants": [],
+        "message_id": msg.id,
+        "channel_id": ctx.channel.id,
+        "votes": {},
+        "vote_message_id": None,
+        "vote_channel_id": None
+    }
+    save_contest(contest)
+    await ctx.send("✅ Concours lancé ! Les participants doivent réagir avec ✅ sur le message ci-dessus. Ensuite, utilisez `!concours_vote` pour lancer le vote.")
+
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def concours_vote(ctx):
+    """Lance la phase de vote après inscription"""
+    global contest
+    if not contest["active"]:
+        await ctx.send("❌ Aucun concours actif.")
+        return
+    if contest["votes"]:
+        await ctx.send("❌ Le vote a déjà été lancé.")
+        return
+
+    # Récupérer le message d'inscription
+    channel = bot.get_channel(contest["channel_id"])
+    if not channel:
+        await ctx.send("❌ Salon introuvable.")
+        return
+    try:
+        msg = await channel.fetch_message(contest["message_id"])
+    except:
+        await ctx.send("❌ Message d'inscription introuvable.")
+        return
+
+    # Lister les participants via la réaction ✅
+    participants = []
+    for reaction in msg.reactions:
+        if str(reaction.emoji) == "✅":
+            async for user in reaction.users():
+                if not user.bot:
+                    participants.append(user.id)
+    contest["participants"] = list(set(participants))
+    if not contest["participants"]:
+        await ctx.send("❌ Aucun participant inscrit.")
+        return
+    save_contest(contest)
+
+    # Créer le message de vote
+    description = "Votez pour votre makeup préféré en réagissant avec le numéro correspondant :\n\n"
+    for i, user_id in enumerate(contest["participants"], 1):
+        try:
+            user = await bot.fetch_user(user_id)
+            description += f"{i}. {user.display_name}\n"
+        except:
+            description += f"{i}. Utilisateur inconnu\n"
+    embed = discord.Embed(
+        title="🗳️ VOTE DU MEILLEUR MAKEUP",
+        description=description,
+        color=discord.Color.blue()
+    )
+    vote_msg = await ctx.send(embed=embed)
+    # Ajouter les réactions numériques (1️⃣, 2️⃣...)
+    for i in range(1, len(contest["participants"]) + 1):
+        await vote_msg.add_reaction(f"{i}\u20e3")
+    contest["vote_message_id"] = vote_msg.id
+    contest["vote_channel_id"] = ctx.channel.id
+    save_contest(contest)
+    await ctx.send("✅ Vote lancé ! Les membres peuvent voter en réagissant avec le numéro correspondant.")
+
+@bot.event
+async def on_raw_reaction_add(payload):
+    """Gère les votes du concours"""
+    if not contest.get("active", False):
+        return
+    if payload.user_id == bot.user.id:
+        return
+    # Vérifier si la réaction est sur le message de vote
+    if contest.get("vote_message_id") == payload.message_id:
+        channel = bot.get_channel(payload.channel_id)
+        if not channel:
+            return
+        try:
+            msg = await channel.fetch_message(payload.message_id)
+        except:
+            return
+        emoji = str(payload.emoji)
+        # Si l'emoji est un chiffre suivi de \u20e3 (ex: "1️⃣")
+        if emoji.endswith("\u20e3") and emoji[0].isdigit():
+            number = int(emoji[0])
+            if 1 <= number <= len(contest["participants"]):
+                user_id = contest["participants"][number-1]
+                # Enregistrer le vote
+                if user_id not in contest["votes"]:
+                    contest["votes"][user_id] = 0
+                contest["votes"][user_id] += 1
+                save_contest(contest)
+                # Optionnel : supprimer la réaction du votant pour éviter les multi-votes
+                try:
+                    await msg.remove_reaction(emoji, payload.member)
+                except:
+                    pass
+        return
+
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def concours_resultat(ctx):
+    """Affiche le résultat du vote et donne un bonus au gagnant"""
+    global contest
+    if not contest.get("active", False):
+        await ctx.send("❌ Aucun concours actif.")
+        return
+    if not contest.get("votes"):
+        await ctx.send("❌ Aucun vote enregistré. Lance d'abord le vote avec `!concours_vote`.")
+        return
+    if not contest["votes"]:
+        await ctx.send("❌ Aucun vote.")
+        return
+
+    # Trouver le gagnant
+    winner_id = max(contest["votes"], key=contest["votes"].get)
+    winner = await bot.fetch_user(winner_id)
+
+    # Bonus de points (5 points)
+    uid = str(winner.id)
+    current_month = get_current_month()
+    if uid not in data:
+        data[uid] = {"count": 0, "month": current_month, "bonus_points": 0}
+    if data[uid]["month"] != current_month:
+        data[uid] = {"count": 0, "month": current_month, "bonus_points": 0}
+    data[uid]["bonus_points"] += 5
+    save_data(data)
+
+    embed = discord.Embed(
+        title="🏆 RÉSULTAT DU CONCOURS 🏆",
+        description=f"Le gagnant est **{winner.display_name}** avec {contest['votes'][winner_id]} vote(s) !\n\nIl reçoit **5 points bonus** !",
+        color=discord.Color.gold()
+    )
+    await ctx.send(embed=embed)
+
+    # Réinitialiser le concours
+    contest = {"active": False, "participants": [], "message_id": None, "channel_id": None, "votes": {}, "vote_message_id": None, "vote_channel_id": None}
+    save_contest(contest)
+
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def concours_annuler(ctx):
+    """Annule le concours en cours"""
+    global contest
+    contest = {"active": False, "participants": [], "message_id": None, "channel_id": None, "votes": {}, "vote_message_id": None, "vote_channel_id": None}
+    save_contest(contest)
+    await ctx.send("✅ Concours annulé.")
 
 # --- Lancement ---
 if __name__ == "__main__":
