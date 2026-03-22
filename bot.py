@@ -20,6 +20,7 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 DATA_FILE = 'makeup_data.json'
 SCHEDULED_FILE = 'scheduled.json'
 CHALLENGES_FILE = 'challenges.json'
+CONTEST_FILE = 'contest.json'
 
 # --- Données des makeups ---
 def load_data():
@@ -59,6 +60,20 @@ def save_challenges(challenges):
         json.dump(challenges, f, indent=4)
 
 challenges = load_challenges()
+
+
+# --- Données des concours ---
+def load_contest():
+    if os.path.exists(CONTEST_FILE):
+        with open(CONTEST_FILE, 'r') as f:
+            return json.load(f)
+    return {"active": False, "participants": [], "message_id": None, "channel_id": None, "votes": {}}
+
+def save_contest(contest):
+    with open(CONTEST_FILE, 'w') as f:
+        json.dump(contest, f, indent=4)
+
+contest = load_contest()
 
 # --- Fonctions utilitaires ---
 def get_current_month():
