@@ -711,10 +711,11 @@ async def participants(ctx):
     embed.description += table
     embed.set_footer(text="🏅 Top 3 médaillés | Les points sont calculés : 1er = 1pt, puis 1pt tous les 3 makeups")
     await ctx.send(embed=embed)
-
 @bot.command()
 async def help_points(ctx):
-    embed = discord.Embed(title="🎨 AIDE DU BOT MMULXP", description="Petit robot crée par Karys, la Présidente !", color=discord.Color.purple())
+    embed = discord.Embed(title="🎨 AIDE DU BOT MMULXP", description="Petit robot créé par Karys, la Présidente !", color=discord.Color.purple())
+    
+    # --- Système de points ---
     embed.add_field(
         name="📸 COMMENT GAGNER DES POINTS ?",
         value=f"Postez une **photo de makeup** dans #{MAKEUP_CHANNEL_NAME}\n"
@@ -723,30 +724,68 @@ async def help_points(ctx):
               "• Les compteurs se réinitialisent chaque **mois** donc attention aux délais !",
         inline=False
     )
+    
+    # --- Commandes utilisateurs ---
     embed.add_field(
-        name="🎯 DÉFIS HEBDOMADAIRES",
-        value="Participez aux défis thématiques pour gagner **1 point bonus** par défi !\n"
-              "`!defi list` - Voir les défis en cours, à venir et terminés\n\n"
-              "**Commandes admin :**\n"
-              "`!defi add \"thème\" \"description\" durée` - Créer un nouveau défi\n"
-              "`!defi remove <id>` - Supprimer un défi",
-        inline=False
-    )
-    embed.add_field(
-        name="💬 COMMANDES",
+        name="💬 COMMANDES UTILISATEURS",
         value="`!points` - Voir vos points\n"
               "`!points @membre` - Voir les points d'un membre\n"
               "`!leaderboard` - Voir le classement\n"
               "`!stats` - Statistiques du mois\n"
               "`!participants` - Liste de tous les participants\n"
-              "`!help_points` - Afficher cette aide\n\n"
-              "**Commandes admin :**\n"
-              "`!reset_xp` - Réinitialiser tous les points\n"
-              "`!reset_member_xp @membre` - Réinitialiser un membre\n"
-              "`!set_xp @membre nombre` - Définir le nombre de makeups\n"
-              "`!planifier` - Gérer les annonces programmées (add/list/remove)",
+              "`!help_points` - Afficher cette aide",
         inline=False
     )
+    
+    # --- Défis ---
+    embed.add_field(
+        name="🎯 DÉFIS HEBDOMADAIRES",
+        value="Participez aux défis thématiques pour gagner **1 point bonus** par défi !\n"
+              "`!defi list` - Voir le défi en cours et les 3 prochains\n\n"
+              "**Commandes admin :**\n"
+              "`!defi add \"thème\" \"description\" durée` - Créer un nouveau défi\n"
+              "`!defi remove <id>` - Supprimer un défi",
+        inline=False
+    )
+    
+    # --- Planification ---
+    embed.add_field(
+        name="📅 ANNONCES PROGRAMMÉES",
+        value="**Commandes admin :**\n"
+              "`!planifier add #salon lundi 18:00 \"Message\"` - Programmer une annonce\n"
+              "`!planifier list` - Lister les annonces\n"
+              "`!planifier remove <id>` - Supprimer une annonce",
+        inline=False
+    )
+    
+    # --- Gestion des points (admin) ---
+    embed.add_field(
+        name="⚙️ GESTION DES POINTS (admin)",
+        value="`!reset_xp` - Réinitialiser tous les points\n"
+              "`!reset_member_xp @membre` - Réinitialiser un membre\n"
+              "`!set_xp @membre nombre` - Définir le nombre de makeups d'un membre\n"
+              "`!admin_add_makeup @membre [nombre]` - Ajouter des makeups manuellement (rattrapage)",
+        inline=False
+    )
+    
+    # --- Concours ---
+    embed.add_field(
+        name="🏆 CONCOURS DU MEILLEUR MAKEUP (admin)",
+        value="`!concours_start` - Lancer un concours (les membres s'inscrivent via réaction ✅)\n"
+              "`!concours_vote` - Lancer la phase de vote\n"
+              "`!concours_resultat` - Afficher le gagnant et attribuer 5 points bonus\n"
+              "`!concours_annuler` - Annuler le concours en cours",
+        inline=False
+    )
+    
+    # --- Test ---
+    embed.add_field(
+        name="🧪 TEST (admin)",
+        value="`!test_annonce <id>` - Forcer l'envoi de l'annonce pour un défi donné",
+        inline=False
+    )
+
+    
     embed.set_footer(text="Bonne chance et faites de beaux makeups ! ✨")
     await ctx.send(embed=embed)
 @bot.command()
