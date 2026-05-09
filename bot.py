@@ -6,7 +6,7 @@ import os
 import sys
 import re
 
-# --- Configuration ---
+# --- Configuration ---è
 intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
